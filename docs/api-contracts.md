@@ -7,28 +7,31 @@ Implemented routes appear in `/openapi.json` and `/docs`. All `/api/v1/` routes 
 | `GET /health` | `200 {"status":"ok"}` | Public liveness |
 | `GET /api/v1/me` | `200 {id,email,role,display_name}` | Registered user with trusted profile |
 | `GET /api/v1/documents` | `200 {items:[Document],limit,offset}` | Student: approved public; Admin: approved public/restricted |
+| `POST /api/v1/documents` | Multipart file + visibility; 201 DocumentMetadata | Registered Student/Admin |
+| `GET /api/v1/documents/{id}` | 200 DocumentMetadata | Uploader, Admin, or other users for approved public metadata |
+| `POST /api/v1/documents/{id}/approve` | JSON `{}`; 200 DocumentMetadata | Admin; pending state; stored hash verified |
+| `POST /api/v1/documents/{id}/reject` | JSON `{reason:string}`; 200 DocumentMetadata | Admin; pending state |
 | `GET /api/v1/security/events` | `200 {items:[SecurityEvent],limit,offset}` | Student: own events; Admin: all events |
 
-List routes accept `limit` (default 20, range 1–100) and `offset` (default 0, nonnegative), ordered by descending `created_at`, then descending `id`. An empty list is a successful result. Pagination is offset based and can shift when rows are inserted. Authorization-filtered results may contain fewer than `limit` items. There is no total count.
+List routes accept `limit` (default 20, range 1–100) and `offset` (default 0, nonnegative), ordered by descending `created_at`, then descending `id`. Pagination may shift with new rows. An empty list succeeds; no total count is returned.
 
-`Document`: UUID `id`, string `original_name`, `visibility` (`public|restricted`), `review_status` (`approved`), `index_status` (`not_indexed|processing|indexed|failed`), RFC 3339 `created_at`. No storage path, hash, or chunk content is returned.
+`Document`: UUID `id`, string `original_name`, `visibility` (`public|restricted`), `review_status=approved`, `index_status` (`not_indexed|processing|indexed|failed`), RFC 3339 `created_at`. The list remains a retrieval catalog.
 
-`SecurityEvent`: UUID `id`, nullable UUID `user_id` and `document_id`, string `event_type`, `decision` (`allow|warn|review|deny`), nullable string `reason`, RFC 3339 `created_at`. Event reasons must never contain passwords, tokens or document content; event production belongs to a future task.
+`DocumentMetadata`: UUID `id` and `uploaded_by`, `original_name`, `visibility`, nullable `sha256`, `review_status` (`pending|approved|rejected`), `index_status`, nullable UUID `reviewed_by`, nullable RFC 3339 `reviewed_at`, and `created_at`. Uploads always start pending/not_indexed with a non-null SHA-256. Metadata responses never return a Storage path, URL, bytes, or chunks. See [ingestion and review](document-ingestion.md) for validation, lifecycle, failure compensation, and exact requests.
 
-Errors use FastAPI's `{detail:...}` envelope: `401` for missing/invalid/expired bearer tokens with `WWW-Authenticate: Bearer`; `403` for permission denial, missing/unsupported trusted role, or anonymous account; `422` for invalid query parameters; `503` for network, upstream service/rate-limit, redirect, or malformed-response failures. Messages are sanitized. Auth is checked before protected reads. Supabase outages fail closed.
+`SecurityEvent`: UUID `id`, nullable UUID `user_id` and `document_id`, string `event_type`, `decision` (`allow|warn|review|deny`), nullable string `reason`, RFC 3339 `created_at`. Actor ownership controls event reads. Keep reasons free of secrets and document content.
 
-The gateway maps upstream 401 to 401 and permission 403 to 403. On `/auth/v1/user`, recognized authentication codes (`bad_jwt`, `session_expired`, `session_not_found`, `user_not_found`) also become 401 when Supabase returns 403. Other Auth 403 responses, such as `user_banned` or `insufficient_aal`, remain permission denials. Only error codes are inspected; upstream messages and bodies are never returned. RLS can return `200 []` for hidden rows; an empty result is not an explicit permission error.
+Errors use FastAPI's `{detail:...}` envelope: 400 malformed/excess multipart data; 401 missing/invalid/expired JWT with a Bearer challenge; 403 denied permissions; 404 missing/hidden metadata; 409 review state/integrity conflicts; 413 upload size; 415 unsupported type; 422 invalid parameters/content; 503 configuration/upstream/uncertain completion.
 
-## Reserved future contracts — NOT implemented
+The user-scoped gateway maps upstream 401 to 401 and permission 403 to 403. Recognized Auth codes `bad_jwt`, `session_expired`, `session_not_found`, and `user_not_found` also map to 401 when Auth returns 403. Rate limits, redirects, malformed responses and service/network failures become sanitized 503s. Privileged document-service credential failures become 503, since the user's token is already verified. Only the write RPC's whitelisted `PT403/PT404/PT409/PT422` codes map to client errors. Upstream bodies/credentials are never exposed. RLS may hide rows with a successful empty result.
 
-These routes have no handlers and are absent from OpenAPI. Calls currently return `404` or `405`; the following contracts are design targets, not working features.
+## Future contracts — NOT implemented
+
+These routes remain absent from OpenAPI and return 404/405:
 
 | Route | Proposed request | Proposed success | Required enforcement |
 | --- | --- | --- | --- |
-| `POST /api/v1/documents` | multipart `file` (PDF/plain text, max 10 MiB), `visibility` (`public|restricted`) | `201 {id,review_status:"pending",index_status:"not_indexed"}` | Authenticated registered user; uploader assigned from identity; hash computed server-side; private upload; no client review/role fields |
-| `POST /api/v1/documents/{id}/approve` | JSON `{}` | `200 {id,review_status:"approved",reviewed_by,reviewed_at}` | Admin dependency before any privileged operation; UUID id; hash required; transactional review and audit |
-| `POST /api/v1/documents/{id}/reject` | JSON `{reason:string}` (1–1000 characters) | `200 {id,review_status:"rejected",reviewed_by,reviewed_at}` | Admin dependency; transactional review and audit |
-| `POST /api/v1/chat/ask` | JSON `{question:string,session_id?:UUID}` (question 1–4000 characters) | `200 {session_id,answer,citations:[{document_id,chunk_id,page_number}]}` | Session ownership; approved chunks only; student public only; user-scoped search RPC; no supplied role, embeddings, or arbitrary context |
-| `POST /api/v1/evaluations/run` | JSON `{configuration:"baseline"|"secure"}` | `202 {id,status:"queued"}` | Admin dependency; synthetic datasets; isolated jobs |
+| `POST /api/v1/chat/ask` | JSON `{question:string,session_id?:UUID}` (1–4000 characters) | `200 {session_id,answer,citations:[{document_id,chunk_id,page_number}]}` | Session ownership; approved user-scoped chunks; Student public-only |
+| `POST /api/v1/evaluations/run` | JSON `{configuration:"baseline"|"secure"}` | `202 {id,status:"queued"}` | Admin; synthetic data; isolated jobs |
 
-Future writes reject unknown fields, return `409` for invalid state transitions and use the existing error envelope. Implement database write policies/authorized server operations and audit writes before enabling these contracts. No upload, review, chat, evaluation, or role mutation endpoint exists today.
+Task 03 does not implement text extraction, chunking, embeddings, indexing, generation, evaluation, Gemini, or an AI Security Agent.

@@ -45,7 +45,7 @@ def client_for(role='student', auth_status=200, profile=True, events=None, docs=
             return httpx.Response(200, json=events or [])
         raise AssertionError(request.url.path)
 
-    app = create_app(Settings(**CONFIG), httpx.MockTransport(handler))
+    app = create_app(Settings(_env_file=None, **CONFIG), httpx.MockTransport(handler))
 
     @app.get('/test/admin')
     def admin(_=Depends(require_admin)):
@@ -55,7 +55,7 @@ def client_for(role='student', auth_status=200, profile=True, events=None, docs=
 
 
 def test_configuration():
-    config = Settings(**CONFIG, supabase_secret_key='synthetic-secret')
+    config = Settings(_env_file=None, **CONFIG, supabase_secret_key='synthetic-secret')
     assert 'synthetic-secret' not in repr(config)
     assert 'sb_publishable_synthetic' not in repr(config)
     for key in ('', 'sb_secret_example', 'legacy-service-jwt'):
@@ -74,7 +74,7 @@ def test_health_startup_and_openapi():
         assert client.get('/docs').status_code == 200
         paths = client.get('/openapi.json').json()['paths']
         assert '/api/v1/chat/ask' not in paths
-        assert list(paths['/api/v1/documents']) == ['get']
+        assert set(paths['/api/v1/documents']) == {'get', 'post'}
     assert not calls
 
 
@@ -155,9 +155,7 @@ def test_pagination_and_future_operations():
     with client:
         for query in ('limit=101', 'offset=-1', 'limit=0'):
             assert client.get('/api/v1/documents?' + query, headers=HEADERS).status_code == 422
-        for path in ('/api/v1/documents', f'/api/v1/documents/{USER}/approve',
-                     f'/api/v1/documents/{USER}/reject', '/api/v1/chat/ask',
-                     '/api/v1/evaluations/run'):
+        for path in ('/api/v1/chat/ask', '/api/v1/evaluations/run'):
             assert client.post(path, headers=HEADERS).status_code in (404, 405)
 
 
@@ -172,7 +170,7 @@ def test_upstream_failure_is_sanitized(failure):
             return httpx.Response(302, headers={'location': 'https://untrusted.invalid'})
         return httpx.Response(500, text='sensitive upstream details')
 
-    with TestClient(create_app(Settings(**CONFIG), httpx.MockTransport(handler))) as client:
+    with TestClient(create_app(Settings(_env_file=None, **CONFIG), httpx.MockTransport(handler))) as client:
         response = client.get('/api/v1/me', headers=HEADERS)
         assert response.status_code == 503
         assert 'sensitive' not in response.text
@@ -203,7 +201,7 @@ def test_gateway_classifies_errors_without_leaking_details(path, status, expecte
 
     async def run():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as upstream:
-            gateway = SupabaseGateway(upstream, Settings(**CONFIG))
+            gateway = SupabaseGateway(upstream, Settings(_env_file=None, **CONFIG))
             with pytest.raises(HTTPException) as error:
                 await gateway.get(path, 'private-token')
             assert error.value.status_code == expected
@@ -223,7 +221,7 @@ def test_gateway_rejects_unexpected_json_shapes(path, payload):
     async def run():
         async with httpx.AsyncClient(transport=httpx.MockTransport(
                 lambda request: httpx.Response(200, json=payload))) as upstream:
-            gateway = SupabaseGateway(upstream, Settings(**CONFIG))
+            gateway = SupabaseGateway(upstream, Settings(_env_file=None, **CONFIG))
             with pytest.raises(HTTPException) as error:
                 await gateway.get(path, 'private-token')
             assert error.value.status_code == 503
@@ -242,7 +240,7 @@ def test_auth_403_uses_documented_codes(code, expected, field):
         async with httpx.AsyncClient(transport=httpx.MockTransport(
                 lambda request: httpx.Response(403, json={field: code, 'message': 'sensitive'}))) as upstream:
             with pytest.raises(HTTPException) as error:
-                await SupabaseGateway(upstream, Settings(**CONFIG)).get('/auth/v1/user', 'private')
+                await SupabaseGateway(upstream, Settings(_env_file=None, **CONFIG)).get('/auth/v1/user', 'private')
             assert error.value.status_code == expected
             assert 'sensitive' not in error.value.detail
 
