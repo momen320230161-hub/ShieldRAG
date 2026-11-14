@@ -15,7 +15,9 @@ List routes accept `limit` (default 20, range 1–100) and `offset` (default 0, 
 
 `SecurityEvent`: UUID `id`, nullable UUID `user_id` and `document_id`, string `event_type`, `decision` (`allow|warn|review|deny`), nullable string `reason`, RFC 3339 `created_at`. Event reasons must never contain passwords, tokens or document content; event production belongs to a future task.
 
-Errors use FastAPI's `{detail:...}` envelope: `401` for missing/invalid/expired bearer tokens with `WWW-Authenticate: Bearer`; `403` for missing/unsupported trusted role or anonymous account; `422` for invalid query parameters; `503` for unavailable or failed Supabase operations, with sanitized messages. Auth is checked before protected reads. Supabase outages fail closed.
+Errors use FastAPI's `{detail:...}` envelope: `401` for missing/invalid/expired bearer tokens with `WWW-Authenticate: Bearer`; `403` for permission denial, missing/unsupported trusted role, or anonymous account; `422` for invalid query parameters; `503` for network, upstream service/rate-limit, redirect, or malformed-response failures. Messages are sanitized. Auth is checked before protected reads. Supabase outages fail closed.
+
+The gateway maps upstream 401 to 401 and permission 403 to 403. On `/auth/v1/user`, recognized authentication codes (`bad_jwt`, `session_expired`, `session_not_found`, `user_not_found`) also become 401 when Supabase returns 403. Other Auth 403 responses, such as `user_banned` or `insufficient_aal`, remain permission denials. Only error codes are inspected; upstream messages and bodies are never returned. RLS can return `200 []` for hidden rows; an empty result is not an explicit permission error.
 
 ## Reserved future contracts — NOT implemented
 

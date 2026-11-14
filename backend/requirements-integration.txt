@@ -1,0 +1,3 @@
+# Test-only fixture provisioning; never imported by the FastAPI application.
+-r requirements.lock
+bcrypt==4.3.0

@@ -189,3 +189,61 @@ def test_concurrent_tokens_are_request_scoped():
 
         asyncio.run(run())
         assert 'authorization' not in gateway.client.headers
+
+
+@pytest.mark.parametrize('path', ['/auth/v1/user', '/rest/v1/profiles', '/rest/v1/documents'])
+@pytest.mark.parametrize('status,expected', [(401, 401), (403, 403), (429, 503),
+                                          (500, 503), (502, 503), (302, 503)])
+def test_gateway_classifies_errors_without_leaking_details(path, status, expected):
+    from app.db.supabase_client import SupabaseGateway
+
+    def handler(request):
+        return httpx.Response(status, json={'message': 'sensitive database and token details'},
+                              headers={'location': 'https://untrusted.invalid'})
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as upstream:
+            gateway = SupabaseGateway(upstream, Settings(**CONFIG))
+            with pytest.raises(HTTPException) as error:
+                await gateway.get(path, 'private-token')
+            assert error.value.status_code == expected
+            assert 'sensitive' not in error.value.detail
+            assert 'private-token' not in error.value.detail
+            assert (error.value.headers or {}).get('WWW-Authenticate') == (
+                'Bearer' if expected == 401 else None)
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('path,payload', [('/auth/v1/user', []), ('/auth/v1/user', None),
+                                        ('/rest/v1/profiles', {}), ('/rest/v1/profiles', [None])])
+def test_gateway_rejects_unexpected_json_shapes(path, payload):
+    from app.db.supabase_client import SupabaseGateway
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, json=payload))) as upstream:
+            gateway = SupabaseGateway(upstream, Settings(**CONFIG))
+            with pytest.raises(HTTPException) as error:
+                await gateway.get(path, 'private-token')
+            assert error.value.status_code == 503
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('code,expected', [('bad_jwt', 401), ('session_expired', 401),
+    ('session_not_found', 401), ('user_not_found', 401), ('user_banned', 403),
+    ('insufficient_aal', 403), ('unexpected_failure', 403)])
+@pytest.mark.parametrize('field', ['code', 'error_code'])
+def test_auth_403_uses_documented_codes(code, expected, field):
+    from app.db.supabase_client import SupabaseGateway
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(
+                lambda request: httpx.Response(403, json={field: code, 'message': 'sensitive'}))) as upstream:
+            with pytest.raises(HTTPException) as error:
+                await SupabaseGateway(upstream, Settings(**CONFIG)).get('/auth/v1/user', 'private')
+            assert error.value.status_code == expected
+            assert 'sensitive' not in error.value.detail
+
+    asyncio.run(run())
