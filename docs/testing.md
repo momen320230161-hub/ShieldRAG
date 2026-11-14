@@ -1,30 +1,65 @@
-# Testing
+# Testing and live verification
 
-Run from `backend/` after installing the lockfile:
+All commands run from `backend/` using Python 3.12. Mocked tests require no credentials:
 
 ```powershell
-.venv/Scripts/python -m pytest -q -m 'not integration'
+.venv/Scripts/python -m pip install -r requirements.lock
+.venv/Scripts/python -m pytest -q -m 'not integration' -p no:cacheprovider
 ```
 
-These tests use only HTTPX mock transports and synthetic data. They cover configuration validation, startup/health, bearer failures, delegated JWT rejection, trusted roles, escalation attempts, Admin dependency, public/restricted documents, pending/rejected isolation, event ownership, pagination, sanitized errors, and token separation. No Supabase credentials are required.
+The unit suite preserves the original checks and adds error classification, malformed upstream JSON, and runner cleanup/failure tests. Live tests are opt-in; skipped tests are not passed tests.
 
-For real, read-only Auth and PostgREST HTTP tests, configure `.env` and opt in:
+## Basic live probes, without accounts
+
+Configure `.env` from `.env.example`, then:
 
 ```powershell
 $env:SHIELDRAG_INTEGRATION = '1'
-.venv/Scripts/python -m pytest -q -m integration
+.venv/Scripts/python -m pytest -q -m integration -p no:cacheprovider
 ```
 
-Three tests require no user token: Auth health, anonymous table-access denial, and rejection of a forged JWT. Successful account tests also require `SHIELDRAG_STUDENT_TOKEN` and `SHIELDRAG_ADMIN_TOKEN` environment variables, obtained from existing synthetic accounts via Supabase Auth. Never put tokens on the command line, in commits, or in CI logs. Without these tokens, those two tests explicitly skip. A complete positive Auth/RBAC HTTP acceptance run requires both roles; mock tests and SQL role simulation alone do not establish successful user JWT acceptance.
+Three probes check Auth health, anonymous PostgREST table-access denial, and invalid JWT rejection through FastAPI. Ten fixture-dependent tests skip unless full verification is enabled. Positive HTTP authentication is established only by the full workflow below. The earlier token-only smoke tests have been replaced by password sign-in and exact fixture assertions.
 
-For live database policy verification, an authorized operator can run `backend/tests/rls_rollback.sql` through a Supabase SQL connection. It creates temporary synthetic Auth users, documents, chunks, and events inside a transaction; exercises Student/Admin RLS and denied writes; raises an exception on a failed assertion; then rolls back all fixtures. If an assertion fails, roll back/close the transaction before continuing. Do not change this script to commit on the existing cloud project.
+## Full live workflow
 
-An actual Uvicorn smoke check is also useful:
+This requires an authorized operator SQL connection to the **same configured project**, plus the publishable key. FastAPI never receives the operator credential. No secret/service-role API key is needed. Setup creates two unique synthetic accounts, six documents, and six 768-dimensional chunks. It assigns Student/Admin roles in trusted profiles. Both accounts deliberately have misleading `user_metadata.role=admin` to test role trust.
+
+Install the test-only password-hashing dependency:
 
 ```powershell
-.venv/Scripts/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-# In another terminal:
-Invoke-RestMethod http://127.0.0.1:8000/health
+.venv/Scripts/python -m pip install -r requirements-integration.txt
 ```
 
-Verification results and remaining account-token blockers are recorded in the implementation PR. `/health` is liveness only; use the integration tests to establish real cloud connectivity.
+If PostgreSQL `psql` is installed, configure its standard `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, and `PGSSLMODE=verify-full` environment variables (or an equivalent private `PGSERVICE` configuration). Obtain connection settings and CA configuration from the project dashboard. Do not put credentials in shell command arguments. Then run:
+
+```powershell
+.venv/Scripts/python -m scripts.verify_live --directory .integration/run-001
+```
+
+Use a fresh directory under `.integration/` for each run. The runner prepares files, applies setup, executes **all tests**, and always attempts guarded cleanup in `finally`, including when setup or pytest fails. SQL and cleanup failures exit nonzero. It preserves the private manifest when cleanup fails and erases the password manifest after successful cleanup.
+
+Without `psql`, use the same files through an authorized SQL operator, including the connected Supabase SQL tool:
+
+```powershell
+.venv/Scripts/python -m scripts.integration_fixtures --directory .integration/run-001
+# Apply .integration/run-001/setup.sql to the configured project using the SQL operator.
+$env:SHIELDRAG_INTEGRATION = '1'
+$env:SHIELDRAG_LIVE_FIXTURES = '1'
+$env:SHIELDRAG_FIXTURE_MANIFEST = '.integration/run-001/manifest.json'
+.venv/Scripts/python -m pytest -q -p no:cacheprovider
+# ALWAYS apply .integration/run-001/cleanup.sql, even if pytest fails.
+# Confirm remaining_fixture_rows = 0, then remove only that manifest locally:
+Remove-Item -LiteralPath '.integration/run-001/manifest.json'
+```
+
+Full mode fails if its manifest is missing or points to another project. It signs in through the real Supabase password endpoint, holds JWTs only in memory, and logs out those synthetic sessions at teardown. Assertions check successful JWT authentication through FastAPI, trusted profiles, approved public/restricted access, exact chunk/RPC result sets, pending/rejected exclusion, a tampered signed JWT, and a denied Student role update verified independently as Admin. Positive assertions prevent empty RLS/RPC results from passing silently.
+
+Setup writes are test-only SQL transactions. They must commit before separate HTTP requests can see the fixtures, so cleanup is a second guarded transaction rather than a rollback of setup. Cleanup verifies account markers, document paths, and unexpected references before deleting exact fixture IDs; it aborts if unexpected data or remaining fixture rows are found. Keep the manifest and cleanup file until removal is confirmed. A crash or terminated process can require manual cleanup. If the guard refuses cleanup, investigate references rather than broadening deletion predicates.
+
+The SQL account adapter writes the **inspected project's managed Auth schema** directly to create confirmed accounts without sending emails. It is test tooling, not a production signup path or general Supabase schema contract. Re-inspect Auth columns when upgrading Supabase; ordinary account provisioning should use the supported Auth Admin API. Generated SQL contains bcrypt hashes; the manifest contains passwords. Both live under ignored `.integration/`; protect them as credentials. Never use pytest `--showlocals`, HTTP wire logging, or upload these files as CI artifacts.
+
+The older `tests/rls_rollback.sql` remains available for operator-only transactional assertions. It creates synthetic fixtures, tests Student/Admin RLS plus security-event ownership and denied approval writes, and rolls back everything. This check simulates database identities and complements actual password/JWT tests.
+
+## Scope and results
+
+See [verification results](verification.md) for observed passes, skips, cleanup, and limitations. `/health` is liveness only. Default CI runs only mocked tests; cloud integration is operator-run to keep privileged credentials out of pull-request workflows.

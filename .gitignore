@@ -6,3 +6,7 @@ __pycache__/
 .pytest_cache/
 *.pyc
 .ruff_cache/
+.integration/
+
+# Generated integration SQL and private credential manifests
+/backend/.integration/
