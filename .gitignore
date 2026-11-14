@@ -7,3 +7,6 @@ __pycache__/
 *.pyc
 .ruff_cache/
 .integration/
+
+# Generated integration SQL and private credential manifests
+/backend/.integration/

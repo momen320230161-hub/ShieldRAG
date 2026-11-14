@@ -12,6 +12,14 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+      - name: Reject tracked generated integration fixtures
+        shell: pwsh
+        run: |
+          $trackedFixtures = @(git ls-files -- .integration/)
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect tracked files' }
+          if ($trackedFixtures.Count -gt 0) {
+            throw 'Generated integration fixtures must remain untracked'
+          }
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
