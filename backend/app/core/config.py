@@ -1,11 +1,19 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = BACKEND_ROOT.parent
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file='.env', extra='ignore', hide_input_in_errors=True)
+    # Environment variables win, then backend/.env, then the project-root .env.
+    # Resolve from this file so launching from either working directory is stable.
+    model_config = SettingsConfigDict(env_file=(PROJECT_ROOT / '.env', BACKEND_ROOT / '.env'),
+                                      extra='ignore', hide_input_in_errors=True)
 
     supabase_url: str
     supabase_publishable_key: SecretStr

@@ -29,6 +29,19 @@ class Documents(BaseModel):
     offset: int
 
 
+class DocumentMetadata(BaseModel):
+    id: UUID
+    uploaded_by: UUID
+    original_name: str
+    visibility: Literal['public', 'restricted']
+    sha256: str | None
+    review_status: Literal['pending', 'approved', 'rejected']
+    index_status: Literal['not_indexed', 'processing', 'indexed', 'failed']
+    reviewed_by: UUID | None = None
+    reviewed_at: datetime | None = None
+    created_at: datetime
+
+
 class SecurityEvent(BaseModel):
     id: UUID
     user_id: UUID | None

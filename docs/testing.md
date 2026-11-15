@@ -63,3 +63,11 @@ The older `tests/rls_rollback.sql` remains available for operator-only transacti
 ## Scope and results
 
 See [verification results](verification.md) for observed passes, skips, cleanup, and limitations. `/health` is liveness only. Default CI runs only mocked tests; cloud integration is operator-run to keep privileged credentials out of pull-request workflows.
+
+Task 03/03.1 has eight separately gated real private-Storage/ingestion tests. Set `SHIELDRAG_INGESTION=1` and configure a modern `SUPABASE_SECRET_KEY` before running the full workflow. Otherwise these tests explicitly skip; their absence must not be reported as successful Storage integration. Ingestion teardown deletes exact synthetic objects through the Storage API and their related audit/metadata rows before the existing account cleanup runs. Follow the [ingestion procedure](document-ingestion.md) and retain the ignored ingestion journal if cleanup fails.
+
+Task 03.1 unit tests cover exact fixed event fields, pending-state preservation, Student denial, caller-controlled field rejection, lost/malformed audit acknowledgements, bounded retries, fail-closed 503s, and confirmed-versus-unconfirmed Storage failures. Separate HTTP attempts are tested as distinct observations; an internal retry must reuse one event UUID.
+
+Live tampering now verifies the real persisted reviewer/document/type/decision/reason fields. Additional live cases verify missing-object auditing, server RPC replay without duplicate rows, denial of direct Student/Admin event inserts/updates, and rejection of an event ID rebound to another document. The lost-acknowledgement test uses real Supabase HTTP and database writes, then a controlled transport fault drops one successful response after commit. It verifies two backend write attempts with the same UUID and exactly one real event; this is explicitly a fault-injected cloud test, not a mocked database result.
+
+Operator-only `tests/ingestion_rollback.sql` and `tests/integrity_audit_rollback.sql` separately check permissions, actor/document associations, fixed reasons, hash/state checks, event primary-key deduplication and user-write denial. All their rows roll back. Task 04 must add a fresh SHA-256 verification immediately before text extraction, chunking and indexing; none of those features is included here.

@@ -11,13 +11,13 @@ Copy-Item .env.example .env
 .venv/Scripts/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open http://127.0.0.1:8000/docs. `GET /health` returns `200 {"status":"ok"}`. This is a liveness endpoint, not a database readiness check. Missing or invalid configuration fails startup. Commands run from `backend/` so the `.env` path is predictable.
+Open http://127.0.0.1:8000/docs. `GET /health` returns `200 {"status":"ok"}`. This is a liveness endpoint, not a database readiness check. Missing or invalid required configuration fails startup. Settings resolve `.env` paths relative to the repository, independent of the launch directory: process environment variables take priority, then `backend/.env`, then root `.env`. A setting omitted from `backend/.env` can come from root `.env`; an explicitly empty backend value overrides the root value. Keep all real keys outside Git.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `SUPABASE_URL` | Yes | HTTPS project origin; existing project is `https://bnehmoxpzycxnsdxxfxc.supabase.co` |
 | `SUPABASE_PUBLISHABLE_KEY` | Yes | Modern `sb_publishable_...` key, sent as `apikey` |
-| `SUPABASE_SECRET_KEY` | No | Reserved for future explicitly authorized server jobs; never used here |
+| `SUPABASE_SECRET_KEY` | For ingestion/review | Modern `sb_secret_...` server key for private Storage and service-role-only write RPCs; never used for user-scoped reads |
 | `GEMINI_API_KEY` | No | Reserved for future generation; never used here |
 
 Settings mask keys in their representation. Never commit real keys, `.env`, tokens, passwords, or session files. Dependencies are pinned directly in `requirements.txt` and fully resolved in `requirements.lock` for Python 3.12 on Windows. Rebuild and review the lock when upgrading dependencies.
@@ -39,3 +39,5 @@ Invoke-RestMethod http://127.0.0.1:8000/api/v1/me -Headers @{ Authorization = "B
 ```
 
 Bind locally for development. A deployed service needs HTTPS, controlled network access, request rate limits, and logs configured to exclude authorization headers and response bodies containing credentials. CORS is not enabled for a frontend in this task.
+
+See [document ingestion](document-ingestion.md) for Task 03 upload/metadata/approval routes, validation, the already-applied forward migration, and failure recovery. Missing server credentials leave read routes available and document writes disabled with 503. No Storage object is made public.
