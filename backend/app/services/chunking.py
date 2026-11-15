@@ -16,7 +16,7 @@ class Chunk:
 
 
 def configuration_hash(settings: Settings) -> str:
-    config = {'version': 1, 'words': settings.rag_chunk_words, 'overlap': settings.rag_overlap_words,
+    config = {'version': 2, 'words': settings.rag_chunk_words, 'overlap': settings.rag_overlap_words,
               'max_bytes': settings.rag_chunk_max_bytes, 'embedding_model': settings.gemini_embedding_model,
               'dimensions': 768, 'normalization': 'l2', 'provenance': 'one-page-per-chunk'}
     return hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
@@ -40,8 +40,11 @@ def chunk_pages(pages: list[dict], settings: Settings) -> list[Chunk]:
             if end == start:
                 raise HTTPException(422, 'A text unit exceeds the embedding input bound')
             content = ' '.join(words[start:end])
-            if content not in seen:
-                seen.add(content)
+            # A source occurrence is identified by its page and word interval.
+            # Equal text at another location is legitimate content, including TXT.
+            occurrence = (page['page'], start, end, content)
+            if occurrence not in seen:
+                seen.add(occurrence)
                 chunks.append(Chunk(len(chunks), page['page'], content))
                 if len(chunks) > settings.rag_max_chunks:
                     raise HTTPException(422, 'Document produces too many chunks')

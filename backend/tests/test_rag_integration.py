@@ -4,6 +4,7 @@ import math
 import os
 from pathlib import Path
 from uuid import UUID, uuid4
+from unittest.mock import AsyncMock
 
 import pytest
 import httpx
@@ -73,7 +74,7 @@ def rag_run(live_run, settings):
 
 
 def upload(run, suffix, text, visibility='public', extension='txt'):
-    data = text_pdf((text,)) if extension == 'pdf' else text.encode()
+    data = text_pdf(text if isinstance(text,tuple) else (text,)) if extension == 'pdf' else text.encode()
     response = run.api.post('/api/v1/documents',headers=run.headers('admin'),
         data={'visibility':visibility},files={'file':(run.rag_marker + suffix + '.' + extension,
             data,'application/pdf' if extension=='pdf' else 'text/plain')})
@@ -181,3 +182,134 @@ def test_live_processing_lease_and_service_rpc_denial(rag_run,settings):
     failed = rag_run.upstream.post('/rest/v1/rpc/shield_fail_index',headers=headers,
         json={'p_actor':body['p_actor'],'p_id':body['p_id'],'p_job':job})
     assert failed.status_code==200 and failed.json()[0]['index_status']=='failed'
+
+
+class FixtureTransport(httpx.AsyncBaseTransport):
+    """Forward genuine HTTP, injecting a bounded failure or authorized result subset."""
+    def __init__(self, mode, document, page=None):
+        self.inner=httpx.AsyncHTTPTransport(trust_env=False,retries=0)
+        self.mode,self.document,self.page,self.dropped=mode,document,page,False
+
+    async def handle_async_request(self,request):
+        key=object_key(UUID(self.document['uploaded_by']),UUID(self.document['id']),
+                       'pdf' if self.page is not None else 'txt')
+        if request.url.path=='/storage/v1/object/authenticated/'+BUCKET+'/'+key:
+            if self.mode=='storage_503':
+                return httpx.Response(503,json={'error':'Synthetic infrastructure outage'})
+            if self.mode=='storage_timeout':
+                raise httpx.ReadTimeout('Synthetic Storage timeout',request=request)
+        response=await self.inner.handle_async_request(request)
+        target={'lost_begin':'shield_begin_index','lost_invalidation':'shield_invalidate_index'}.get(self.mode)
+        if target and request.url.path.endswith('/rpc/'+target) and response.status_code==200 and not self.dropped:
+            await response.aread()
+            await response.aclose()
+            self.dropped=True
+            raise httpx.ReadTimeout('Synthetic lost successful acknowledgement',request=request)
+        if self.page is not None and request.url.path.endswith('/rpc/match_shield_chunks') and response.status_code==200:
+            await response.aread()
+            rows=[r for r in response.json() if r['document_id']==self.document['id'] and r['page_number']==self.page]
+            await response.aclose()
+            return httpx.Response(200,json=rows)
+        return response
+
+    async def aclose(self):
+        await self.inner.aclose()
+
+
+def approved_index(run,suffix,text):
+    doc=upload(run,suffix,text)
+    path='/api/v1/documents/'+doc['id']
+    assert run.api.post(path+'/approve',headers=run.headers('admin'),json={}).status_code==200
+    assert run.api.post(path+'/index',headers=run.headers('admin'),json=CONSENT).status_code==200
+    return doc,path
+
+
+def saved_chunks(run,doc_id,headers):
+    response=run.upstream.get('/rest/v1/document_chunks',headers=headers,
+        params={'document_id':'eq.'+doc_id,'select':'id,content,page_number','order':'chunk_index'})
+    assert response.status_code==200
+    return response.json()
+
+
+@pytest.mark.parametrize('mode',['storage_503','storage_timeout','lost_begin'])
+def test_live_cached_transient_fault_preserves_completed_revision(rag_run,settings,mode):
+    doc,path=approved_index(rag_run,mode,'The synthetic cached archive opens at eleven.')
+    headers={'apikey':settings.supabase_secret_key.get_secret_value()}
+    before=saved_chunks(rag_run,doc['id'],headers)
+    metadata=rag_run.upstream.get('/rest/v1/documents',headers=headers,
+        params={'id':'eq.'+doc['id'],'select':'*'}).json()
+    with TestClient(create_app(settings,FixtureTransport(mode,doc))) as api:
+        api.app.state.gemini.embed=AsyncMock(side_effect=RuntimeError('Synthetic Gemini outage'))
+        response=api.post(path+'/index',headers=rag_run.headers('admin'),json=CONSENT)
+        assert response.status_code==503
+        api.app.state.gemini.embed.assert_not_called()
+    after=rag_run.upstream.get('/rest/v1/documents',headers=headers,
+        params={'id':'eq.'+doc['id'],'select':'*'}).json()
+    assert after==metadata and after[0]['index_operation_id'] is None
+    assert saved_chunks(rag_run,doc['id'],headers)==before
+    assert saved_chunks(rag_run,doc['id'],rag_run.headers('student'))==before
+    # Ordinary cached verification also succeeds while Gemini is unavailable.
+    with TestClient(create_app(settings)) as api:
+        api.app.state.gemini.embed=AsyncMock(side_effect=RuntimeError('Synthetic Gemini outage'))
+        assert api.post(path+'/index',headers=rag_run.headers('admin'),json=CONSENT).json()['cached']
+        api.app.state.gemini.embed.assert_not_called()
+    assert saved_chunks(rag_run,doc['id'],headers)==before
+
+
+@pytest.mark.parametrize('failure',['sha256_mismatch','stored_object_missing'])
+def test_live_cached_confirmed_failure_revokes_retrieval_without_deleting_chunks(rag_run,settings,failure):
+    doc,path=approved_index(rag_run,'cached-'+failure,'The synthetic cached integrity fact is amber.')
+    headers={'apikey':settings.supabase_secret_key.get_secret_value()}
+    before=saved_chunks(rag_run,doc['id'],headers)
+    key=object_key(UUID(doc['uploaded_by']),UUID(doc['id']),'txt')
+    if failure=='sha256_mismatch':
+        response=rag_run.upstream.put('/storage/v1/object/'+BUCKET+'/'+key,
+            headers={**headers,'Content-Type':'text/plain'},content=b'Synthetic tampered original.')
+        assert response.status_code==200
+    else:
+        remove_object(rag_run,headers,key)
+    # The DB commit is genuine; one successful acknowledgement is deliberately lost.
+    transport=FixtureTransport('lost_invalidation',doc)
+    with TestClient(create_app(settings,transport)) as api:
+        denied=api.post(path+'/index',headers=rag_run.headers('admin'),json=CONSENT)
+        assert denied.status_code==409 and transport.dropped
+    assert saved_chunks(rag_run,doc['id'],headers)==before
+    assert rag_run.api.get(path,headers=rag_run.headers('admin')).json()['index_status']=='failed'
+    reason='SHA-256 mismatch detected' if failure=='sha256_mismatch' else 'Stored object is missing'
+    audit=rag_run.upstream.get('/rest/v1/security_events',headers=headers,
+        params={'document_id':'eq.'+doc['id'],'event_type':'eq.document_integrity_failure','select':'reason'})
+    assert audit.status_code==200 and audit.json()==[{'reason':reason}]
+    for role in ('student','admin'):
+        assert saved_chunks(rag_run,doc['id'],rag_run.headers(role))==[]
+    # Direct vector RPC must also exclude the retained but invalidated chunks.
+    vector=rag_run.upstream.get('/rest/v1/document_chunks',headers=headers,
+        params={'document_id':'eq.'+doc['id'],'select':'embedding'}).json()[0]['embedding']
+    for role in ('student','admin'):
+        matches=rag_run.upstream.post('/rest/v1/rpc/match_shield_chunks',headers=rag_run.headers(role),
+            json={'query_embedding':json.loads(vector),'match_count':20})
+        assert matches.status_code==200 and doc['id'] not in {r['document_id'] for r in matches.json()}
+
+
+def test_live_identical_pdf_pages_retrieve_and_cite_each_occurrence(rag_run,settings):
+    fact='The synthetic repeated-page archive code is emerald harbor.'
+    doc=upload(rag_run,'repeated-pages',('',fact,'','','','','',fact),extension='pdf')
+    path='/api/v1/documents/'+doc['id']
+    assert rag_run.api.post(path+'/approve',headers=rag_run.headers('admin'),json={}).status_code==200
+    indexed=rag_run.api.post(path+'/index',headers=rag_run.headers('admin'),json=CONSENT)
+    assert indexed.status_code==200 and indexed.json()['chunk_count']==2
+    chunks=saved_chunks(rag_run,doc['id'],rag_run.headers('student'))
+    assert [r['page_number'] for r in chunks]==[2,8] and chunks[0]['content']==chunks[1]['content']
+    question={'question':'What is the code of the synthetic repeated-page archive?','top_k':10}
+    found=rag_run.api.post('/api/v1/rag/search',headers=rag_run.headers('student'),json=question)
+    assert found.status_code==200
+    assert {r['page'] for r in found.json()['matches'] if r['document_id']==doc['id']}=={2,8}
+    for page in (2,8):
+        # Select one page from actual JWT-authorized RPC rows, avoiding nondeterministic
+        # model selection between identical excerpts. Auth, RLS and Gemini remain real.
+        with TestClient(create_app(settings,FixtureTransport('authorized_page',doc,page))) as api:
+            answer=api.post('/api/v1/rag/ask',headers=rag_run.headers('student'),json=question)
+            assert answer.status_code==200 and answer.json()['supported']
+            citation=answer.json()['citations'][0]
+            expected=next(c for c in chunks if c['page_number']==page)
+            assert citation['page']==page and citation['chunk_id']==expected['id']
+            assert citation['quote'] in expected['content']

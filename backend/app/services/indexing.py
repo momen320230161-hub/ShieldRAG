@@ -17,15 +17,16 @@ from app.services.extraction import extract_pages
 logger = logging.getLogger(__name__)
 
 
-async def verified_bytes(store, principal, document):
+async def verified_bytes(store, principal, document, *, audit_store=None):
+    audit_store = audit_store if audit_store is not None else store
     try:
         data = await store.download_for_review(principal, document)
     except DocumentIntegrityError as error:
-        await record_integrity_failure(store, principal, document, error.failure)
+        await record_integrity_failure(audit_store, principal, document, error.failure)
         raise
     observed = hashlib.sha256(data).hexdigest()
     if not document.get('sha256') or not hmac.compare_digest(observed, document['sha256']):
-        await record_integrity_failure(store, principal, document,
+        await record_integrity_failure(audit_store, principal, document,
             'sha256_mismatch' if document.get('sha256') else 'stored_hash_missing', observed)
         raise HTTPException(409, 'Stored document integrity check failed')
     return data
@@ -41,13 +42,24 @@ async def index_document(gateway, store, rag_store, gemini, principal, document_
     state = await rag_store.begin(principal, document_id, job, document['sha256'],
                                    settings.gemini_embedding_model, configuration_hash(settings))
     cached = state.get('index_status') == 'indexed'
+    if cached and (state.get('id') != str(document_id) or state.get('sha256') != document['sha256']
+                   or state.get('storage_path') != document['storage_path']
+                   or 'index_revision_id' not in state):
+        raise HTTPException(503, 'Cached index revision was not confirmed')
+    if not cached and (state.get('index_status') != 'processing'
+                       or state.get('index_operation_id') != str(job)):
+        # A malformed/uncertain begin response does not establish job ownership.
+        raise HTTPException(503, 'Index ownership was not confirmed')
     try:
         async with asyncio.timeout(settings.rag_index_timeout):
-            data = await verified_bytes(store, principal, document)
             if cached:
+                # No lease, mutations, Gemini calls or generic failure cleanup.
+                # Confirmed integrity failures use a separate audited revision CAS.
+                await verified_bytes(store, principal, state, audit_store=rag_store)
                 rows = await gateway.get('/rest/v1/document_chunks', principal.token,
                     {'document_id': f'eq.{document_id}', 'select': 'id', 'limit': '256'})
                 return result(document_id, settings, len(rows), True)
+            data = await verified_bytes(store, principal, document)
             pages = await extract_pages(data, document['storage_path'].rsplit('.', 1)[-1], settings)
             chunks = chunk_pages(pages, settings)
             vectors = await gemini.embed([c.content for c in chunks], 'RETRIEVAL_DOCUMENT')
@@ -63,11 +75,12 @@ async def index_document(gateway, store, rag_store, gemini, principal, document_
             return result(document_id, settings, len(chunks), False)
     except BaseException as error:
         # Cleanup is shielded from request cancellation. Lease expiry handles process crashes.
-        with anyio.CancelScope(shield=True):
-            try:
-                await rag_store.fail(principal, document_id, job)
-            except HTTPException:
-                logger.error('Index reconciliation required; document_id=%s', document_id)
+        if not cached:
+            with anyio.CancelScope(shield=True):
+                try:
+                    await rag_store.fail(principal, document_id, job)
+                except HTTPException:
+                    logger.error('Index reconciliation required; document_id=%s', document_id)
         if isinstance(error, TimeoutError):
             raise HTTPException(503, 'Document indexing exceeded its time limit') from None
         raise

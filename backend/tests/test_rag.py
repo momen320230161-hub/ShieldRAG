@@ -24,6 +24,7 @@ from app.services.extract_worker import extract
 from app.services.extraction import extract_pages
 from app.services.gemini import GeminiService, SYSTEM_INSTRUCTION, normalize_embedding
 from app.services.indexing import index_document
+from app.db.document_store import DocumentIntegrityError
 from app.services.rag import ask, search
 
 USER = str(UUID(int=1))
@@ -83,7 +84,7 @@ def test_chunking_deterministic_overlap_dedup_and_bounds():
     assert all(len(c.content.encode()) <= 256 and c.page_number == 1 for c in chunks)
     assert set(chunks[0].content.split()) & set(chunks[1].content.split())
     assert [c.chunk_index for c in chunks] == list(range(len(chunks)))
-    assert len(chunk_pages([{'page': 1, 'text': 'same'}, {'page': 2, 'text': 'same'}], config)) == 1
+    assert len(chunk_pages([{'page': 1, 'text': 'same'}, {'page': 2, 'text': 'same'}], config)) == 2
     assert configuration_hash(config) != configuration_hash(settings())
 
 
@@ -151,8 +152,11 @@ def index_dependencies(status='approved', content=b'synthetic facts', cached=Fal
     gateway = SimpleNamespace(get=AsyncMock(return_value=[document]))
     store = SimpleNamespace(download_for_review=AsyncMock(return_value=content), record_integrity_failure=AsyncMock())
     store.record_integrity_failure.side_effect = lambda *args: None
-    rag_store = SimpleNamespace(begin=AsyncMock(return_value={'index_status': 'indexed' if cached else 'processing'}),
-        publish=AsyncMock(return_value={'index_status': 'indexed'}), fail=AsyncMock(return_value={'index_status':'failed'}))
+    rag_store = SimpleNamespace(begin=AsyncMock(side_effect=lambda *args: {
+        **document, 'index_status':'indexed' if cached else 'processing',
+        'index_operation_id':None if cached else str(args[2]), 'index_revision_id':str(UUID(int=9))}),
+        publish=AsyncMock(return_value={'index_status': 'indexed'}), fail=AsyncMock(return_value={'index_status':'failed'}),
+        record_integrity_failure=AsyncMock())
     gemini = SimpleNamespace(embed=AsyncMock(return_value=[normalize_embedding([1]*768)]))
     return document, gateway, store, rag_store, gemini
 
@@ -323,6 +327,7 @@ def test_cached_index_checks_integrity_without_embedding_or_publication():
     store.download_for_review.assert_awaited_once()
     gemini.embed.assert_not_called()
     rag_store.publish.assert_not_called()
+    rag_store.fail.assert_not_called()
 
 
 def test_tampering_during_embedding_blocks_atomic_publication():
@@ -333,3 +338,94 @@ def test_tampering_during_embedding_blocks_atomic_publication():
     assert error.value.status_code == 409
     rag_store.publish.assert_not_called()
     store.record_integrity_failure.assert_awaited_once()
+
+
+def test_identical_pdf_text_on_pages_two_and_eight_preserves_occurrences():
+    pages = extract(text_pdf(('', 'Repeated paragraph.', '', '', '', '', '', 'Repeated paragraph.')),
+                    'pdf',10,1000)
+    chunks = chunk_pages(pages,settings())
+    assert [(c.chunk_index,c.page_number,c.content) for c in chunks] == [
+        (0,2,'Repeated paragraph.'),(1,8,'Repeated paragraph.')]
+    assert chunks == chunk_pages(pages,settings())
+    # Reprocessing the same source interval does not duplicate a chunk.
+    assert chunk_pages(pages+pages,settings()) == chunks
+
+
+def test_legitimate_repeated_windows_in_txt_are_not_dropped():
+    config = settings(rag_chunk_max_bytes=256)
+    chunks = chunk_pages([{'page':None,'text':'word '*200}],config)
+    assert len(chunks)>1 and len({c.content for c in chunks})<len(chunks)
+    assert all(c.page_number is None and len(c.content.encode())<=256 for c in chunks)
+    assert [c.chunk_index for c in chunks]==list(range(len(chunks)))
+
+
+@pytest.mark.parametrize('page',[2,8])
+def test_repeated_page_search_and_citation_keep_exact_page(page):
+    gateway,gemini,_ = retrieval_dependencies()
+    gateway.rpc.return_value[0]['page_number']=page
+    output=asyncio.run(ask(gateway,gemini,principal(),Question(question='When?'),settings()))
+    assert output.supported and output.citations[0].page==page
+    assert str(output.citations[0].chunk_id)==CHUNK
+
+
+@pytest.mark.parametrize('error',[HTTPException(503,'Storage unavailable'),TimeoutError(),asyncio.CancelledError()])
+def test_cached_storage_error_timeout_or_cancellation_never_cleans_up(error):
+    _,gateway,store,rag_store,gemini = index_dependencies(cached=True)
+    store.download_for_review.side_effect=error
+    expected = asyncio.CancelledError if isinstance(error,asyncio.CancelledError) else HTTPException
+    with pytest.raises(expected):
+        asyncio.run(index_document(gateway,store,rag_store,gemini,principal(),UUID(DOC),settings()))
+    rag_store.fail.assert_not_called()
+    rag_store.record_integrity_failure.assert_not_called()
+    store.record_integrity_failure.assert_not_called()
+    gemini.embed.assert_not_called()
+
+
+def test_cached_verification_does_not_depend_on_gemini_availability():
+    _,gateway,store,rag_store,gemini = index_dependencies(cached=True)
+    gemini.embed.side_effect=HTTPException(503,'Gemini unavailable')
+    assert asyncio.run(index_document(gateway,store,rag_store,gemini,principal(),UUID(DOC),settings()))['cached']
+    gemini.embed.assert_not_called()
+    rag_store.fail.assert_not_called()
+
+
+@pytest.mark.parametrize('failure', ['sha256_mismatch','stored_object_missing','invalid_storage_reference'])
+def test_cached_confirmed_integrity_failure_uses_revision_audit_not_job_cleanup(failure):
+    _,gateway,store,rag_store,gemini = index_dependencies(cached=True)
+    if failure=='sha256_mismatch':
+        store.download_for_review.return_value=b'tampered'
+    else:
+        store.download_for_review.side_effect=DocumentIntegrityError(failure,'Integrity denied')
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(index_document(gateway,store,rag_store,gemini,principal(),UUID(DOC),settings()))
+    assert error.value.status_code==409
+    call=rag_store.record_integrity_failure.call_args.args
+    assert call[1]['index_revision_id']==str(UUID(int=9)) and call[3]==failure
+    rag_store.fail.assert_not_called()
+    store.record_integrity_failure.assert_not_called()
+    gemini.embed.assert_not_called()
+
+
+def test_cached_integrity_audit_retries_same_event_without_destructive_fallback():
+    _,gateway,store,rag_store,gemini = index_dependencies(cached=True)
+    store.download_for_review.return_value=b'tampered'
+    rag_store.record_integrity_failure.side_effect=[HTTPException(503,'Lost acknowledgement'),None]
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(index_document(gateway,store,rag_store,gemini,principal(),UUID(DOC),settings()))
+    assert error.value.status_code==409
+    calls=rag_store.record_integrity_failure.call_args_list
+    assert len(calls)==2 and calls[0].args[2]==calls[1].args[2]
+    rag_store.fail.assert_not_called()
+
+
+@pytest.mark.parametrize('state',[{'index_status':'indexed'}, {'index_status':'processing'},
+    {'index_status':'processing','index_operation_id':str(UUID(int=123))}])
+def test_uncertain_begin_state_never_triggers_cleanup(state):
+    _,gateway,store,rag_store,gemini=index_dependencies()
+    rag_store.begin.side_effect=None
+    rag_store.begin.return_value=state
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(index_document(gateway,store,rag_store,gemini,principal(),UUID(DOC),settings()))
+    assert error.value.status_code==503
+    rag_store.fail.assert_not_called()
+    store.download_for_review.assert_not_called()
