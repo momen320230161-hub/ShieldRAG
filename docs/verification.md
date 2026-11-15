@@ -1,4 +1,82 @@
-# Task 03.1 verification — 2026-11-15
+# Task 04.1 verification - 2026-11-15
+
+## Final results
+
+- Complete suite: **241 passed, 0 skipped** in **179.84 seconds**: **208 unit/mocked/orchestration tests and 33 live Supabase/Gemini tests**. All live opt-ins were enabled. This adds 15 local and 6 targeted live regression cases; existing Auth, ingestion, approval, integrity, RLS, Gemini and RAG tests passed. One existing AnyIO/Starlette deprecation warning remains.
+- Root cause 1: global content-only deduplication discarded repeated page occurrences. Chunk occurrence identity now includes page, source word interval and content. Real extraction/chunking preserved equal paragraphs on PDF pages 2 and 8, sequential indices and deterministic ordering, while keeping legitimate repeated TXT windows. Reprocessing an identical interval is deduplicated; word/byte/overlap limits remain unchanged. Configuration version is 2 so an explicitly requested rebuild can recover previously omitted content.
+- Root cause 2: a cache hit assigned an active operation UUID to an indexed document, then generic failure cleanup could delete its completed chunks. Cache hits now return the existing row without mutation. Python skips generic cleanup for every cached failure. Generic failure transitions require the exact current processing job and never delete chunk rows. Malformed/uncertain begin responses do not establish cleanup ownership.
+- Actual cloud fault tests injected Storage 503, Storage read timeout and a lost successful cache-begin acknowledgement. Independent database reads confirmed identical full completed metadata, unchanged chunk IDs, continued Student retrieval and no active operation. Cached verification also succeeded with the Gemini embedding method deliberately unavailable and never called. Timeout/cancellation behavior additionally passed unit regressions.
+- Genuine synthetic cached-original tampering and deletion both returned 409, retained all completed chunk rows for trusted server inspection, marked that completed revision failed and denied Student/Admin chunk and vector-RPC retrieval. Each persisted exactly one correctly attributed, fixed-reason integrity event despite deliberately dropping one successful invalidation acknowledgement and retrying the same UUID. The actual Storage missing-object response was distinguished from injected outages.
+- Actual repeated-page PDF indexing generated real `gemini-embedding-001` embeddings and two distinct page-attributed chunk rows. Normal caller-JWT search returned both pages. Real `gemini-3.5-flash-lite` answers produced validated citations for each page. For deterministic page selection between identical excerpts, test instrumentation selected one page from real authorized RPC results; Auth, RLS, source rows and Gemini were real, and no result was fabricated. The existing public TXT/restricted TXT/PDF acceptance tests again validated finite L2-normalized 768-dimensional vector storage and role isolation.
+- All **five SQL rollback suites** passed: RLS, ingestion, integrity audit, atomic RAG publication and new cached-index hardening. They cover exact no-mutation cache behavior, old cached operation tokens, failed second-vector rollback, concurrent/expired leases, retry, retained old chunks, stale failure/replayed invalidation protection, legacy null revisions and retrieval denial after compromise. All their synthetic rows rolled back.
+- New forward migration **`20261115150450_shieldrag_cached_index_integrity_hardening`** adds nullable `index_revision_id`, corrects existing begin/publish/fail functions, and adds service-only `shield_invalidate_index`. The new RPC reuses the existing integrity-audit validation, fixed reasons, UUID acknowledgement and deduplication in the same transaction as revision-scoped retrieval revocation. No applied migration, table, RLS policy or original search RPC was changed/replayed. Stable publication revision IDs prevent an old observation from revoking a newer successful index. No production-like documents were rebuilt.
+- The migration was applied using the connected migration tool and exported with its server-generated version, using the previously established unavailable-Windows-CLI fallback. A whitespace-normalized SQL digest matched local file and deployed migration history exactly: `aa1a7d5a77808a44780bff439fa1541a`. Direct privilege inspection confirmed all four index write RPCs are SECURITY INVOKER, fixed empty search_path, service_role executable and anon/authenticated denied.
+- Independent post-teardown SQL returned **0 uploaded synthetic documents, 0 Storage objects and 0 security events**. Guarded remaining-account/document/chunk cleanup returned **remaining_fixture_rows = 0**. Both journals were removed by successful teardown; the password manifest was removed only after cleanup confirmation. Platform-managed Auth audit retention is unchanged.
+- `pip check` and diff checks passed. Deliverable files were scanned against actual configured credentials and synthetic account passwords; none matched. Environment files and generated fixtures remain ignored.
+- Final Security Advisor: the existing **Leaked Password Protection Disabled** Auth warning; no database/RLS finding. An earlier check in this task returned no findings, so the final warning is the reported state. Auth settings were not modified. [Remediation](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+
+## Executed reproduction command
+
+From `backend/`, after preparing and applying `.integration/task041-live/setup.sql` through the authorized SQL operator:
+
+```powershell
+$env:SHIELDRAG_INTEGRATION='1'
+$env:SHIELDRAG_LIVE_FIXTURES='1'
+$env:SHIELDRAG_INGESTION='1'
+$env:SHIELDRAG_RAG='1'
+$env:SHIELDRAG_FIXTURE_MANIFEST=(Resolve-Path .integration/task041-live/manifest.json).Path
+.venv/Scripts/python -m pytest -q -p no:cacheprovider --basetemp=.integration/task041-full-1 --tb=short
+```
+
+The run has been cleaned up. Reproduce with a new directory using [testing instructions](testing.md), apply that directory's setup, run the tests, then always apply its guarded cleanup. The five `tests/*_rollback.sql` suites were also executed through the authorized SQL operator. The local-only run before cloud verification passed 208 tests with 27 then-existing live cases deselected; those deselections were not counted as passes.
+
+## State transitions and remaining limits
+
+Cache hit: `indexed -> indexed` without writes or an active lease. Transient failures leave this completed record intact. New/replacement job: `not_indexed/failed/indexed -> processing -> indexed`, with approved status, expected original SHA, explicit consent and current Admin checks retained. Generic job failure can change only its own `processing -> failed` and retains old chunk data hidden by RLS. Confirmed cached integrity failure atomically commits the existing audit and `indexed -> failed` only for the observed revision, retaining chunks. A stale verifier audits its observation but cannot alter a newer completed revision or processing job.
+
+A genuinely unavailable database cannot guarantee a durable revocation/audit commit. Such requests return 503, log only trusted UUIDs for reconciliation and never delete completed data as a fallback. Retained invalid/failed chunks remain server-only and are replaced by a later successful authorized rebuild. Configuration version 2 requires explicit reindexing to repair pre-hardening provenance; no automatic repair of production-like data occurs. Prompt-injection/semantic-grounding limits, external processing authorization, Windows parser resource limits and deployment rate controls remain as documented in [RAG architecture](rag.md).
+
+PR #3 remains the single delivery PR on `feat/baseline-rag-gemini`, targeting main. No frontend, Task 05 feature, table reset or automatic merge is included.
+
+## Historical Task 04 verification - 2026-11-15
+
+## Final results
+
+- **220 passed, 0 skipped** in **123.71 seconds**: **193 unit/mocked/orchestration tests and 27 real cloud integration tests**. The final run enabled every live flag. CI runs the 193 local tests without keys; deselected live tests are not reported as passed.
+- Actual Admin indexing succeeded for public TXT, restricted TXT and a text-bearing PDF using genuine `gemini-embedding-001` document embeddings: **768 dimensions**, finite normalized vectors stored in pgvector, correct TXT/null and PDF/page-1 provenance. Cached retry preserved original chunk IDs without duplicate embedding/publication.
+- Actual query embeddings and the existing pgvector RPC returned permitted sources through caller JWTs. Student restricted denial, Admin restricted access, approved-only isolation, pending/rejected rejection, service-RPC denial to both user roles, current trusted roles, private Storage and all earlier ingestion/integrity controls passed.
+- Actual `gemini-3.5-flash-lite` generated the correct synthetic facts with source IDs/quotes checked against retrieved rows. Final live checks also confirmed no-result and insufficient-context abstention. This is real end-to-end acceptance, not a mocked generation claim.
+- Deliberate synthetic Storage modification blocked indexing with 409, persisted one integrity event, left review approved/index failed and published no chunks. Live lease exclusion and direct privileged-RPC denial passed.
+- Four SQL rollback suites passed against the actual migrated project: RLS, ingestion, integrity audit and RAG atomic publication. RAG verified rollback after an invalid second vector, hidden processing chunks, idempotent retry, stale failure protection, expired-lease recovery and external-consent isolation. Every SQL suite rolled back its synthetic rows.
+- Applied/exported **`20261115143019_shieldrag_atomic_baseline_rag`**. The server-generated migration version was retained; the unavailable Windows CLI was not used to invent a version. Existing tables/history were preserved. Direct privilege inspection confirmed all three index write RPCs are SECURITY INVOKER with fixed empty search paths, executable by service_role and denied to anon/authenticated. Existing search remains SECURITY INVOKER and authenticated-only for users.
+- Independent post-teardown SQL returned **0 remaining Storage objects, 0 uploaded synthetic document rows and 0 synthetic security events**. Guarded account/document/chunk cleanup returned **remaining_fixture_rows = 0**. The password manifest was removed only after that confirmation; ingestion/RAG journals had already been removed after successful teardown. Platform-managed Auth audit retention is unchanged.
+- `pip check` and `git diff --check` passed. A scan against actual configured keys and synthetic passwords found no matches in deliverable files; private environment/fixture paths are ignored.
+- Final Supabase Security Advisor: one existing Auth warning, **Leaked Password Protection Disabled**; no new database/RLS finding. [Remediation](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection). Auth settings were not changed. One existing AnyIO/Starlette deprecation warning remains.
+
+## Exact executed command
+
+From `backend/`, after preparing/applying the uniquely marked operator fixtures:
+
+```powershell
+$env:SHIELDRAG_INTEGRATION='1'
+$env:SHIELDRAG_LIVE_FIXTURES='1'
+$env:SHIELDRAG_INGESTION='1'
+$env:SHIELDRAG_RAG='1'
+$env:SHIELDRAG_FIXTURE_MANIFEST=(Resolve-Path .integration/task04-live/manifest.json).Path
+.venv/Scripts/python -m pytest -q -p no:cacheprovider --basetemp=.integration/pytest-task04-final --tb=short
+```
+
+That run has been cleaned up. Use a new directory and manifest following [testing instructions](testing.md), apply its setup before HTTP tests, and always run its guarded cleanup afterward. All four checked-in `tests/*_rollback.sql` suites were executed through the authorized connected SQL operator. No operator credential is supplied to FastAPI.
+
+An earlier run exposed a Gemini 400 for the SDK-transformed Pydantic response schema. The wire schema now uses Gemini's supported Schema subset; strict Pydantic length/field validation still runs independently after generation. An earlier exact-object cleanup timed out; the retained journal supported recovery, and bounded idempotent deletion retries were added. Both issues were resolved before the final complete run. Initial sandbox temporary-directory/parser permissions were resolved by running tests with normal authorized filesystem access.
+
+## Delivery and remaining limits
+
+Changes are on `feat/baseline-rag-gemini`, based on latest `main` (`c4a911a`), for a new PR to main; no automatic merge. Backend only. See [RAG architecture](rag.md), [API contracts](api-contracts.md), [setup](backend-setup.md) and [security](security.md).
+
+No acceptance-test blocker remains. Restricted content requires explicit Admin authorization for external Gemini processing; third-party residency/retention requires an operator decision. Semantic faithfulness and prompt-injection resistance are baseline safeguards, not a proved security guarantee. Windows extraction lacks a hard OS memory sandbox; deployments need suitable resource/rate controls. Crashes can leave a hidden processing lease until expiry, and an uncertain commit requires retry/reconciliation. Similarity threshold and recall need domain-specific evaluation. Model changes require reindexing. Chat remains stateless because safe persistence would require write policies, citation provenance and permission-aware history behavior. Task 05 security agents, classifiers, evaluations and frontend work remain out of scope.
+
+## Historical Task 03.1 verification — 2026-11-15
 
 ## Current final results
 

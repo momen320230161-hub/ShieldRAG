@@ -67,6 +67,9 @@ insert into public.documents(id,uploaded_by,original_name,storage_path,sha256,vi
 values({literal(document['id'])},{admin_id},'synthetic integration fixture',
     {literal(document['storage_path'])},repeat('a',64),{literal(document['visibility'])},
     {literal(document['review_status'])});
+update public.documents set index_status='indexed',indexed_sha256=sha256,
+    embedding_model='synthetic-fixture-model',index_config_hash=repeat('b',64),
+    external_processing_authorized=true where id={literal(document['id'])};
 insert into public.document_chunks(id,document_id,chunk_index,content,embedding)
 values({literal(document['chunk_id'])},{literal(document['id'])},0,'synthetic fixture',
     {vector}::extensions.vector);""")
