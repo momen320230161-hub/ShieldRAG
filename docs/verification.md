@@ -1,4 +1,42 @@
-# Task 03.1 verification — 2026-11-15
+# Task 04 verification - 2026-11-15
+
+## Final results
+
+- **220 passed, 0 skipped** in **123.71 seconds**: **193 unit/mocked/orchestration tests and 27 real cloud integration tests**. The final run enabled every live flag. CI runs the 193 local tests without keys; deselected live tests are not reported as passed.
+- Actual Admin indexing succeeded for public TXT, restricted TXT and a text-bearing PDF using genuine `gemini-embedding-001` document embeddings: **768 dimensions**, finite normalized vectors stored in pgvector, correct TXT/null and PDF/page-1 provenance. Cached retry preserved original chunk IDs without duplicate embedding/publication.
+- Actual query embeddings and the existing pgvector RPC returned permitted sources through caller JWTs. Student restricted denial, Admin restricted access, approved-only isolation, pending/rejected rejection, service-RPC denial to both user roles, current trusted roles, private Storage and all earlier ingestion/integrity controls passed.
+- Actual `gemini-3.5-flash-lite` generated the correct synthetic facts with source IDs/quotes checked against retrieved rows. Final live checks also confirmed no-result and insufficient-context abstention. This is real end-to-end acceptance, not a mocked generation claim.
+- Deliberate synthetic Storage modification blocked indexing with 409, persisted one integrity event, left review approved/index failed and published no chunks. Live lease exclusion and direct privileged-RPC denial passed.
+- Four SQL rollback suites passed against the actual migrated project: RLS, ingestion, integrity audit and RAG atomic publication. RAG verified rollback after an invalid second vector, hidden processing chunks, idempotent retry, stale failure protection, expired-lease recovery and external-consent isolation. Every SQL suite rolled back its synthetic rows.
+- Applied/exported **`20261115143019_shieldrag_atomic_baseline_rag`**. The server-generated migration version was retained; the unavailable Windows CLI was not used to invent a version. Existing tables/history were preserved. Direct privilege inspection confirmed all three index write RPCs are SECURITY INVOKER with fixed empty search paths, executable by service_role and denied to anon/authenticated. Existing search remains SECURITY INVOKER and authenticated-only for users.
+- Independent post-teardown SQL returned **0 remaining Storage objects, 0 uploaded synthetic document rows and 0 synthetic security events**. Guarded account/document/chunk cleanup returned **remaining_fixture_rows = 0**. The password manifest was removed only after that confirmation; ingestion/RAG journals had already been removed after successful teardown. Platform-managed Auth audit retention is unchanged.
+- `pip check` and `git diff --check` passed. A scan against actual configured keys and synthetic passwords found no matches in deliverable files; private environment/fixture paths are ignored.
+- Final Supabase Security Advisor: one existing Auth warning, **Leaked Password Protection Disabled**; no new database/RLS finding. [Remediation](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection). Auth settings were not changed. One existing AnyIO/Starlette deprecation warning remains.
+
+## Exact executed command
+
+From `backend/`, after preparing/applying the uniquely marked operator fixtures:
+
+```powershell
+$env:SHIELDRAG_INTEGRATION='1'
+$env:SHIELDRAG_LIVE_FIXTURES='1'
+$env:SHIELDRAG_INGESTION='1'
+$env:SHIELDRAG_RAG='1'
+$env:SHIELDRAG_FIXTURE_MANIFEST=(Resolve-Path .integration/task04-live/manifest.json).Path
+.venv/Scripts/python -m pytest -q -p no:cacheprovider --basetemp=.integration/pytest-task04-final --tb=short
+```
+
+That run has been cleaned up. Use a new directory and manifest following [testing instructions](testing.md), apply its setup before HTTP tests, and always run its guarded cleanup afterward. All four checked-in `tests/*_rollback.sql` suites were executed through the authorized connected SQL operator. No operator credential is supplied to FastAPI.
+
+An earlier run exposed a Gemini 400 for the SDK-transformed Pydantic response schema. The wire schema now uses Gemini's supported Schema subset; strict Pydantic length/field validation still runs independently after generation. An earlier exact-object cleanup timed out; the retained journal supported recovery, and bounded idempotent deletion retries were added. Both issues were resolved before the final complete run. Initial sandbox temporary-directory/parser permissions were resolved by running tests with normal authorized filesystem access.
+
+## Delivery and remaining limits
+
+Changes are on `feat/baseline-rag-gemini`, based on latest `main` (`c4a911a`), for a new PR to main; no automatic merge. Backend only. See [RAG architecture](rag.md), [API contracts](api-contracts.md), [setup](backend-setup.md) and [security](security.md).
+
+No acceptance-test blocker remains. Restricted content requires explicit Admin authorization for external Gemini processing; third-party residency/retention requires an operator decision. Semantic faithfulness and prompt-injection resistance are baseline safeguards, not a proved security guarantee. Windows extraction lacks a hard OS memory sandbox; deployments need suitable resource/rate controls. Crashes can leave a hidden processing lease until expiry, and an uncertain commit requires retry/reconciliation. Similarity threshold and recall need domain-specific evaluation. Model changes require reindexing. Chat remains stateless because safe persistence would require write policies, citation provenance and permission-aware history behavior. Task 05 security agents, classifiers, evaluations and frontend work remain out of scope.
+
+## Historical Task 03.1 verification — 2026-11-15
 
 ## Current final results
 

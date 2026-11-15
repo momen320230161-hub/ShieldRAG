@@ -18,11 +18,13 @@ $env:SHIELDRAG_INTEGRATION = '1'
 .venv/Scripts/python -m pytest -q -m integration -p no:cacheprovider
 ```
 
-Three probes check Auth health, anonymous PostgREST table-access denial, and invalid JWT rejection through FastAPI. Ten fixture-dependent tests skip unless full verification is enabled. Positive HTTP authentication is established only by the full workflow below. The earlier token-only smoke tests have been replaced by password sign-in and exact fixture assertions.
+Three probes check Auth health, anonymous PostgREST table-access denial, and invalid JWT rejection through FastAPI. Fixture-dependent ingestion/RAG tests skip unless their respective flags are enabled. Positive HTTP authentication is established only by the full workflow below. The earlier token-only smoke tests have been replaced by password sign-in and exact fixture assertions.
 
 ## Full live workflow
 
 This requires an authorized operator SQL connection to the **same configured project**, plus the publishable key. FastAPI never receives the operator credential. No secret/service-role API key is needed. Setup creates two unique synthetic accounts, six documents, and six 768-dimensional chunks. It assigns Student/Admin roles in trusted profiles. Both accounts deliberately have misleading `user_metadata.role=admin` to test role trust.
+
+The preceding key statement applies to the Auth/RLS suite. Full ingestion and Task 04 RAG acceptance additionally require a private modern server key; RAG requires the configured Gemini key and explicit external-processing/cost opt-in below. Seeded chunk fixtures now include verified indexed/hash/consent metadata. Pending/rejected fixtures deliberately retain chunks and indexed markers, so negative tests prove approval isolation rather than relying on absent content.
 
 Install the test-only password-hashing dependency:
 
@@ -70,4 +72,33 @@ Task 03.1 unit tests cover exact fixed event fields, pending-state preservation,
 
 Live tampering now verifies the real persisted reviewer/document/type/decision/reason fields. Additional live cases verify missing-object auditing, server RPC replay without duplicate rows, denial of direct Student/Admin event inserts/updates, and rejection of an event ID rebound to another document. The lost-acknowledgement test uses real Supabase HTTP and database writes, then a controlled transport fault drops one successful response after commit. It verifies two backend write attempts with the same UUID and exactly one real event; this is explicitly a fault-injected cloud test, not a mocked database result.
 
-Operator-only `tests/ingestion_rollback.sql` and `tests/integrity_audit_rollback.sql` separately check permissions, actor/document associations, fixed reasons, hash/state checks, event primary-key deduplication and user-write denial. All their rows roll back. Task 04 must add a fresh SHA-256 verification immediately before text extraction, chunking and indexing; none of those features is included here.
+Operator-only `tests/ingestion_rollback.sql` and `tests/integrity_audit_rollback.sql` separately check permissions, actor/document associations, fixed reasons, hash/state checks, event primary-key deduplication and user-write denial. All their rows roll back. Task 04 now adds independent original-byte verification and RAG acceptance as described below.
+
+
+## Task 04 full RAG acceptance
+
+Use a fresh ignored directory and the existing operator setup/cleanup workflow. The exact complete-suite command, from `backend/`, is:
+
+```powershell
+.venv/Scripts/python -m scripts.integration_fixtures --directory .integration/task04-run-001
+# Authorized SQL operator applies this directory's setup.sql to the configured project.
+$env:SHIELDRAG_INTEGRATION = '1'
+$env:SHIELDRAG_LIVE_FIXTURES = '1'
+$env:SHIELDRAG_INGESTION = '1'
+$env:SHIELDRAG_RAG = '1'
+$env:SHIELDRAG_FIXTURE_MANIFEST = (Resolve-Path .integration/task04-run-001/manifest.json).Path
+.venv/Scripts/python -m pytest -q -p no:cacheprovider --tb=short
+# ALWAYS apply this directory's cleanup.sql after pytest fixture teardown.
+# Confirm remaining_fixture_rows=0 and no ingestion/RAG journal remains.
+Remove-Item -LiteralPath '.integration/task04-run-001/manifest.json'
+```
+
+`SHIELDRAG_RAG=1` authorizes sending only synthetic fixture text/questions to Gemini and paying the small API cost. The suite uploads three approved synthetic sources (public TXT, restricted TXT, public text-bearing PDF), genuinely embeds and stores 768-dimensional vectors, checks normalization/page provenance, direct RPC/RLS and FastAPI search, validates generated answers/quotes/citations, and verifies no-result and insufficient-context abstention. Separate synthetic files test integrity denial and lease exclusion. No production-like document is processed.
+
+Unit/mock checks cover deterministic overlap/deduplication/bounds, extraction, normalized vectors, provider retries/errors, original SHA verification before extraction and publication, cached/concurrent/partial indexing, roles, model/hash/consent filtering, revoked roles, untrusted prompt separation, missing/forged citations and credential rejection. CI runs these without cloud keys. Running the default suite without opt-in will skip live tests; report those as skipped.
+
+For database transaction checks, the authorized SQL operator runs each checked-in file against the already migrated project: `tests/rls_rollback.sql`, `tests/ingestion_rollback.sql`, `tests/integrity_audit_rollback.sql`, and `tests/rag_rollback.sql`. Each rolls back its synthetic rows. RAG checks failed second-chunk rollback, processing isolation, cached no-duplicate publication, expired-lease recovery, stale job denial and consent isolation.
+
+The RAG fixture writes `rag-journal.json` before uploads. Teardown verifies synthetic owners, filename markers and canonical object keys, deletes only those exact Storage objects (bounded idempotent retries), then their chunks/events/document rows. The original account cleanup refuses unexpected references, so a failed teardown prevents account removal. Preserve the manifest and journal on failure; re-run the guarded teardown or an operator-reviewed recovery restricted to those exact run IDs. Never broaden deletion to other data or erase the manifest before confirming cleanup. Platform-managed Auth audit records remain subject to platform retention.
+
+If local sandbox filesystem permissions prevent pytest temporary fixtures or subprocess execution, run the same command with normal authorized filesystem access. An optional fresh `--basetemp=.integration/pytest-run-001` keeps temporary fixtures under the ignored workspace. Do not reuse a directory containing retained recovery evidence.

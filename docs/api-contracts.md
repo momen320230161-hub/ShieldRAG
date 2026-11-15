@@ -34,4 +34,16 @@ These routes remain absent from OpenAPI and return 404/405:
 | `POST /api/v1/chat/ask` | JSON `{question:string,session_id?:UUID}` (1–4000 characters) | `200 {session_id,answer,citations:[{document_id,chunk_id,page_number}]}` | Session ownership; approved user-scoped chunks; Student public-only |
 | `POST /api/v1/evaluations/run` | JSON `{configuration:"baseline"|"secure"}` | `202 {id,status:"queued"}` | Admin; synthetic data; isolated jobs |
 
-Task 03 does not implement text extraction, chunking, embeddings, indexing, generation, evaluation, Gemini, or an AI Security Agent.
+Task 04 implements the stateless RAG routes below. Session persistence, evaluation and the AI Security Agent remain future work.
+
+## Baseline RAG routes
+
+| Route | Request | Response / authorization |
+| --- | --- | --- |
+| `POST /api/v1/documents/{id}/index` | `{"external_processing_authorized":true}`; no extra fields | Admin, approved only. `200 {document_id,index_status:"indexed",chunk_count,embedding_model,dimensions:768,cached}` |
+| `POST /api/v1/rag/search` | `{"question":"When does the archive open?","top_k":5}` | Authenticated. `200 {matches:[{chunk_id,document_id,document_name,page,content,similarity}]}` |
+| `POST /api/v1/rag/ask` | Same question/top_k | Authenticated. `200 {answer,supported,citations:[{chunk_id,document_id,document_name,page,quote}]}` |
+
+Questions are 1–1,800 UTF-8 bytes; top_k defaults to 5 and is bounded 1–10. Extra fields are rejected. JSON body limit 8 KiB, including streamed bodies. Validation returns `422 {detail:"Invalid request fields or limits"}` without echoing input. Index consent is explicit and mandatory; false/omitted consent fails. Student indexing is 403; unapproved/concurrent/integrity conflicts are 409. Missing/hidden document is 404. Provider, timeout and uncertain commit failures are sanitized 503.
+
+Search returns an empty list below the configured threshold. Ask without usable supporting evidence returns `supported:false`, empty citations and `The answer cannot be determined from the available authorized documents.` No generation call occurs when search has no matches. PDF `page` is 1-based; TXT is null. Generated IDs are never accepted as database citations. These APIs do not create chat sessions or return signed Storage URLs. See [RAG architecture and limitations](rag.md).

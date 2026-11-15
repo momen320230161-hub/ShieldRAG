@@ -46,7 +46,7 @@ Only an Admin can review. Approval downloads the canonical stored object through
 
 `shield_review_document` rechecks the trusted Admin role, locks the document row, verifies pending state and the approval hash, updates reviewer/time, retains `not_indexed`, and inserts exactly one `document_approved` or `document_rejected` event in the same transaction. A failed audit insertion rolls back the state change. Competing reviews serialize on the row: one can commit and the other receives 409. Repeated transitions are not allowed. Approval integrity verification precedes this short transaction; the backend is the only application Storage writer, and no content-update endpoint exists. An operator possessing the server key remains a trusted privileged actor.
 
-Pending/rejected files are retained privately. Existing chunk RLS and the search RPC still exclude pending/rejected records; Students still cannot retrieve restricted chunks. Task 03 creates no chunks. Approved documents remain not indexed until a separately authorized Task 04 workflow is implemented.
+Pending/rejected files are retained privately. Chunk RLS and the search RPC exclude pending/rejected records; Students cannot retrieve restricted chunks. Upload/review create no chunks. Approved documents remain not indexed until an Admin explicitly authorizes the [Task 04 indexing workflow](rag.md).
 
 ### Persistent integrity-denial audit (Task 03.1)
 
