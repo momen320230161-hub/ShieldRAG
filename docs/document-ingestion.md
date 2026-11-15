@@ -42,11 +42,33 @@ Structural validation is not antivirus scanning, a complete PDF renderer, or a g
 
 An authenticated Student or Admin uploads a document as `pending / not_indexed`. The server generates a unique key `ingestions/<verified-user-uuid>/<document-uuid>.pdf|txt` and performs a non-upsert upload to the existing private `shieldrag-documents` bucket. It then registers metadata and a `document_uploaded` audit event in one database transaction.
 
-Only an Admin can review. Approval downloads the canonical stored object through the trusted backend, computes SHA-256 again, and compares it with the original saved hash. Missing/tampered content cannot be approved. Integrity denial is logged using only document/reviewer UUIDs. Rejection requires no download, allowing an unsafe or missing file to be rejected.
+Only an Admin can review. Approval downloads the canonical stored object through the trusted backend, computes SHA-256 again, and compares it with the original saved hash. Missing/tampered content cannot be approved. Confirmed integrity denials are persisted before the 409 response; see the independent audit operation below. Rejection requires no download, allowing an unsafe or missing file to be rejected.
 
 `shield_review_document` rechecks the trusted Admin role, locks the document row, verifies pending state and the approval hash, updates reviewer/time, retains `not_indexed`, and inserts exactly one `document_approved` or `document_rejected` event in the same transaction. A failed audit insertion rolls back the state change. Competing reviews serialize on the row: one can commit and the other receives 409. Repeated transitions are not allowed. Approval integrity verification precedes this short transaction; the backend is the only application Storage writer, and no content-update endpoint exists. An operator possessing the server key remains a trusted privileged actor.
 
 Pending/rejected files are retained privately. Existing chunk RLS and the search RPC still exclude pending/rejected records; Students still cannot retrieve restricted chunks. Task 03 creates no chunks. Approved documents remain not indexed until a separately authorized Task 04 workflow is implemented.
+
+### Persistent integrity-denial audit (Task 03.1)
+
+`shield_record_integrity_failure` is an additional server-role-only, SECURITY INVOKER RPC with a fixed empty search path. It rechecks the trusted Admin actor and document hash/path association, then appends an event without approving, rejecting, or changing any document fields. It commits independently: raising the approval's HTTP 409 inside the audit transaction would roll back the event and recreate the auditing gap.
+
+Every event has server-controlled `event_type=document_integrity_failure`, `decision=deny`, the authenticated Admin reviewer as `user_id`, and the affected `document_id`. Its reason is selected from this fixed map:
+
+| Confirmed condition | Persisted reason |
+| --- | --- |
+| SHA-256 mismatch | `SHA-256 mismatch detected` |
+| Missing object (including Storage's recognized HTTP 400/404 NoSuchKey response) | `Stored object is missing` |
+| Stored object exceeds the size bound | `Stored object exceeds size limit` |
+| Missing saved SHA-256 | `Stored SHA-256 is missing` |
+| Noncanonical stored object reference | `Stored object reference is invalid` |
+
+General Storage/network/permission-service errors remain HTTP 503 and are not mislabeled as confirmed integrity failures. Event records contain no content, credentials, access tokens, observed hashes, Storage paths, or raw request data. The approval body stays `{}`; callers cannot supply audit fields or IDs. Neither Student nor Admin user JWTs gain direct event-write or RPC privileges.
+
+The server generates one event UUID per approval attempt and reuses it for at most one internal retry after an uncertain/lost acknowledgement. The existing event primary key deduplicates the write, and the RPC rejects an ID rebound to another actor/document/failure. Separate HTTP attempts are separate security observations and intentionally produce separate events. A retry can confirm an already committed event without changing the document state.
+
+If the write cannot be confirmed, the API returns **503**, keeps approval denied, and logs only document/reviewer/event UUIDs for investigation. A row may already exist if its acknowledgement was lost; the response does not claim it was recorded. Definite database failures are not automatically retried. The operation has no durable retry queue. The document remains pending absent another legitimate review; it never reverts another review's outcome.
+
+**Task 04 must independently revalidate original-file SHA-256 immediately before any text extraction, chunking, or indexing.** It must not treat prior approval as a replacement for this new check. Those operations remain outside Task 03.1.
 
 ## Partial failures and errors
 
@@ -77,4 +99,4 @@ $env:SHIELDRAG_FIXTURE_MANIFEST = '.integration/<fresh-run>/manifest.json'
 .venv/Scripts/python -m pytest -q -p no:cacheprovider
 ```
 
-The ingestion tests create only uniquely named uploads owned by the synthetic accounts. Teardown checks uploader/run/name/key/chunk/audit references, deletes exact objects through the Storage API, then removes their audit/metadata rows. It never deletes Storage records through SQL. An ignored ingestion journal remains if teardown fails; resolve it before applying the original guarded account cleanup. The separate `tests/ingestion_rollback.sql` verifies real function grants, server-side role checks, hash conflicts, transitions, and audit creation entirely inside a rolled-back operator transaction. See [verification](verification.md) for actual results and skips.
+The ingestion tests create only uniquely named uploads owned by the synthetic accounts. Teardown checks uploader/run/name/key/chunk/audit references, deletes exact objects through the Storage API, then removes their audit/metadata rows, including the new integrity events. It never deletes Storage records through SQL. An ignored ingestion journal remains if teardown fails; resolve it before applying the original guarded account cleanup. The separate `tests/ingestion_rollback.sql` and `tests/integrity_audit_rollback.sql` verify real RPC grants, trusted actors/document association, retry deduplication, write denial, state preservation, and audit records entirely inside rolled-back operator transactions. Live tests also forward real Supabase calls while deliberately dropping one successful audit acknowledgement, then verify one persisted event after the backend retry. See [verification](verification.md) for actual results and skips.

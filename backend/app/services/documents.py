@@ -7,9 +7,10 @@ import anyio
 from fastapi import HTTPException
 
 from app.core.authentication import Principal
-from app.db.document_store import DocumentStore, object_key
+from app.db.document_store import DocumentIntegrityError, DocumentStore, object_key
 from app.db.supabase_client import SupabaseGateway
 from app.services.file_validation import ValidatedFile
+from app.services.audit import record_integrity_failure
 
 logger = logging.getLogger(__name__)
 METADATA_FIELDS = ('id,uploaded_by,original_name,visibility,sha256,review_status,index_status,'
@@ -89,9 +90,15 @@ async def review_document(gateway: SupabaseGateway, store: DocumentStore, princi
         raise HTTPException(409, 'Only pending documents can be reviewed')
     verified_hash = None
     if decision == 'approved':
-        data = await store.download_for_review(principal, document)
+        try:
+            data = await store.download_for_review(principal, document)
+        except DocumentIntegrityError as error:
+            await record_integrity_failure(store, principal, document, error.failure)
+            raise
         verified_hash = hashlib.sha256(data).hexdigest()
         if not document['sha256'] or not hmac.compare_digest(verified_hash, document['sha256']):
+            failure = 'sha256_mismatch' if document['sha256'] else 'stored_hash_missing'
+            await record_integrity_failure(store, principal, document, failure, verified_hash)
             logger.warning('Document integrity check denied; document_id=%s reviewer_id=%s',
                            document_id, principal.user.id)
             raise HTTPException(409, 'Stored document integrity check failed')

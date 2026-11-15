@@ -8,9 +8,12 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
+import httpx
+from fastapi.testclient import TestClient
 from pypdf import PdfWriter
 
 from app.db.document_store import BUCKET, object_key
+from app.main import create_app
 from test_integration import live_run, settings  # Reuse synthetic-account fixtures.
 
 pytestmark = pytest.mark.integration
@@ -56,7 +59,8 @@ def ingestion(live_run, settings):
             audit = live_run.upstream.get('/rest/v1/security_events', headers=privileged,
                                           params={'document_id': f'eq.{doc_id}', 'select': 'user_id,event_type'})
             if audit.status_code != 200 or any(event['user_id'] not in users or event['event_type'] not in (
-                    'document_uploaded', 'document_approved', 'document_rejected') for event in audit.json()):
+                    'document_uploaded', 'document_approved', 'document_rejected',
+                    'document_integrity_failure') for event in audit.json()):
                 pytest.fail('Ingestion cleanup refused unexpected audit data', pytrace=False)
             # Remove only the exact server-generated object; never delete Storage via SQL.
             removed = live_run.upstream.request('DELETE', '/storage/v1/object/' + BUCKET, headers=privileged,
@@ -146,9 +150,125 @@ def test_live_tampering_blocks_approval(ingestion, settings):
         content=b'Synthetic tampered bytes')
     assert response.status_code == 200
     assert ingestion.api.post('/api/v1/documents/' + doc['id'] + '/approve',
+        headers=ingestion.headers('student'), json={}).status_code == 403
+    assert integrity_events(ingestion, doc['id']) == []
+    assert ingestion.api.post('/api/v1/documents/' + doc['id'] + '/approve',
         headers=ingestion.headers('admin'), json={}).status_code == 409
     response = ingestion.api.get('/api/v1/documents/' + doc['id'], headers=ingestion.headers('admin'))
     assert response.json()['review_status'] == 'pending'
+    assert response.json()['reviewed_by'] is None
+    events = integrity_events(ingestion, doc['id'])
+    assert len(events) == 1
+    event = events[0]
+    UUID(event['id'])
+    assert event == {'id': event['id'], 'user_id': ingestion.manifest['accounts']['admin']['id'],
+                     'document_id': doc['id'], 'event_type': 'document_integrity_failure',
+                     'decision': 'deny', 'reason': 'SHA-256 mismatch detected'}
+    assert 'Synthetic tampered bytes' not in json.dumps(event)
+
+
+def integrity_events(run, document_id):
+    response = run.upstream.get('/rest/v1/security_events', headers=run.headers('admin'), params={
+        'document_id': 'eq.' + document_id, 'event_type': 'eq.document_integrity_failure',
+        'select': 'id,user_id,document_id,event_type,decision,reason'})
+    assert response.status_code == 200
+    return response.json()
+
+
+def test_live_missing_object_is_audited_without_approving(ingestion, settings):
+    doc, _ = upload(ingestion, 'missing-object')
+    key = object_key(UUID(doc['uploaded_by']), UUID(doc['id']), 'txt')
+    response = ingestion.upstream.request('DELETE', '/storage/v1/object/' + BUCKET,
+        headers={'apikey': settings.supabase_secret_key.get_secret_value()}, json={'prefixes': [key]})
+    assert response.status_code == 200
+    response = ingestion.api.post('/api/v1/documents/' + doc['id'] + '/approve',
+                                  headers=ingestion.headers('admin'), json={})
+    assert response.status_code == 409
+    assert ingestion.api.get('/api/v1/documents/' + doc['id'],
+                             headers=ingestion.headers('admin')).json()['review_status'] == 'pending'
+    events = integrity_events(ingestion, doc['id'])
+    assert len(events) == 1 and events[0]['reason'] == 'Stored object is missing'
+
+
+class DropFirstAuditAcknowledgement(httpx.AsyncBaseTransport):
+    """Forward real requests; drop one real successful audit response after commit."""
+
+    def __init__(self):
+        self.inner = httpx.AsyncHTTPTransport(trust_env=False)
+        self.dropped = False
+        self.event_ids = []
+
+    async def handle_async_request(self, request):
+        audit = request.url.path.endswith('/shield_record_integrity_failure')
+        if audit:
+            self.event_ids.append(json.loads(request.content)['p_event_id'])
+        response = await self.inner.handle_async_request(request)
+        if audit and response.status_code == 200 and not self.dropped:
+            self.dropped = True
+            await response.aread()
+            await response.aclose()
+            raise httpx.ReadTimeout('Controlled lost audit acknowledgement', request=request)
+        return response
+
+    async def aclose(self):
+        await self.inner.aclose()
+
+
+def test_live_lost_audit_acknowledgement_does_not_duplicate(ingestion, settings):
+    doc, _ = upload(ingestion, 'lost-audit-ack')
+    key = object_key(UUID(doc['uploaded_by']), UUID(doc['id']), 'txt')
+    changed = ingestion.upstream.put('/storage/v1/object/' + BUCKET + '/' + key,
+        headers={'apikey': settings.supabase_secret_key.get_secret_value(), 'Content-Type': 'text/plain'},
+        content=b'Synthetic tampered bytes')
+    assert changed.status_code == 200
+    transport = DropFirstAuditAcknowledgement()
+    with TestClient(create_app(settings, transport)) as api:
+        assert api.post('/api/v1/documents/' + doc['id'] + '/approve',
+                        headers=ingestion.headers('admin'), json={}).status_code == 409
+    assert transport.dropped and len(transport.event_ids) == 2
+    assert len(set(transport.event_ids)) == 1
+    events = integrity_events(ingestion, doc['id'])
+    assert len(events) == 1 and events[0]['id'] == transport.event_ids[0]
+    assert ingestion.api.get('/api/v1/documents/' + doc['id'],
+                             headers=ingestion.headers('admin')).json()['review_status'] == 'pending'
+
+
+def test_live_audit_retry_association_and_direct_user_write_denial(ingestion, settings):
+    doc, _ = upload(ingestion, 'audit-permissions')
+    key = object_key(UUID(doc['uploaded_by']), UUID(doc['id']), 'txt')
+    changed = ingestion.upstream.put('/storage/v1/object/' + BUCKET + '/' + key,
+        headers={'apikey': settings.supabase_secret_key.get_secret_value(), 'Content-Type': 'text/plain'},
+        content=b'Synthetic tampered bytes')
+    assert changed.status_code == 200
+    assert ingestion.api.post('/api/v1/documents/' + doc['id'] + '/approve',
+                             headers=ingestion.headers('admin'), json={}).status_code == 409
+    original = integrity_events(ingestion, doc['id'])
+    assert len(original) == 1
+    payload = {'p_actor': ingestion.manifest['accounts']['admin']['id'], 'p_document_id': doc['id'],
+               'p_event_id': original[0]['id'], 'p_failure': 'sha256_mismatch',
+               'p_expected_sha256': doc['sha256'], 'p_storage_path': key,
+               'p_observed_sha256': hashlib.sha256(b'Synthetic tampered bytes').hexdigest()}
+    for _ in range(2):
+        response = ingestion.upstream.post('/rest/v1/rpc/shield_record_integrity_failure',
+            headers={'apikey': settings.supabase_secret_key.get_secret_value()}, json=payload)
+        assert response.status_code == 200 and response.json() == original[0]['id']
+    for role in ('student', 'admin'):
+        assert ingestion.upstream.post('/rest/v1/rpc/shield_record_integrity_failure',
+            headers=ingestion.headers(role), json=payload).status_code == 403
+        assert ingestion.upstream.post('/rest/v1/security_events', headers=ingestion.headers(role), json={
+            'user_id': payload['p_actor'], 'document_id': doc['id'], 'event_type': 'document_integrity_failure',
+            'decision': 'deny', 'reason': 'client supplied raw data'}).status_code == 403
+        updated = ingestion.upstream.patch('/rest/v1/security_events', headers=ingestion.headers(role),
+            params={'id': 'eq.' + original[0]['id']}, json={'reason': 'client supplied raw data'})
+        assert updated.status_code in (200, 204, 403)
+    assert integrity_events(ingestion, doc['id']) == original
+    other, _ = upload(ingestion, 'audit-association')
+    wrong = {**payload, 'p_document_id': other['id'], 'p_expected_sha256': other['sha256'],
+             'p_storage_path': object_key(UUID(other['uploaded_by']), UUID(other['id']), 'txt')}
+    assert ingestion.upstream.post('/rest/v1/rpc/shield_record_integrity_failure',
+        headers={'apikey': settings.supabase_secret_key.get_secret_value()}, json=wrong).status_code == 409
+    assert integrity_events(ingestion, other['id']) == []
+    assert integrity_events(ingestion, doc['id']) == original
 
 
 def test_live_concurrent_review_has_one_winner_and_one_audit_event(ingestion, settings):

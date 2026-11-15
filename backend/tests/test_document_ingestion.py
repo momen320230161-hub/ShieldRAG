@@ -37,6 +37,9 @@ class Cloud:
         self.failure = None
         self.cleanup_fails = False
         self.race = False
+        self.integrity_events = {}
+        self.audit_failure = None
+        self.storage_response = None
 
     def __call__(self, request):
         import json
@@ -84,8 +87,37 @@ class Cloud:
                     raise httpx.ReadTimeout('sensitive upstream details', request=request)
                 return httpx.Response(200, json={'Key': key})
             key = path.split('/shieldrag-documents/', 1)[1]
+            if self.storage_response is not None:
+                status, payload = self.storage_response
+                return httpx.Response(status, json=payload)
             return httpx.Response(200, content=self.objects[key]) if key in self.objects else httpx.Response(404)
         payload = json.loads(request.content)
+        if path.endswith('/shield_record_integrity_failure'):
+            assert payload['p_actor'] == ADMIN
+            if self.audit_failure == 'database':
+                return httpx.Response(500, json={'code': 'XX000', 'message': 'sensitive database body'})
+            if self.audit_failure == 'unavailable':
+                return httpx.Response(503, json={'message': 'sensitive upstream body'})
+            doc = self.documents[payload['p_document_id']]
+            assert doc['sha256'] == payload['p_expected_sha256']
+            assert doc['storage_path'] == payload['p_storage_path']
+            reasons = {'sha256_mismatch': 'SHA-256 mismatch detected',
+                       'stored_object_missing': 'Stored object is missing',
+                       'stored_size_exceeded': 'Stored object exceeds size limit',
+                       'stored_hash_missing': 'Stored SHA-256 is missing',
+                       'invalid_storage_reference': 'Stored object reference is invalid'}
+            event_id = payload['p_event_id']
+            if event_id not in self.integrity_events:
+                self.integrity_events[event_id] = {
+                    'id': event_id, 'user_id': ADMIN, 'document_id': doc['id'],
+                    'event_type': 'document_integrity_failure', 'decision': 'deny',
+                    'reason': reasons[payload['p_failure']]}
+                self.events.append('document_integrity_failure')
+                if self.audit_failure == 'lost_response':
+                    raise httpx.ReadTimeout('sensitive upstream details', request=request)
+            if self.audit_failure == 'malformed_ack':
+                return httpx.Response(200, json={'unexpected': 'sensitive response body'})
+            return httpx.Response(200, json=event_id)
         if path.endswith('/shield_register_document'):
             if self.failure == 'definite':
                 return httpx.Response(422, json={'code': 'PT422', 'message': 'sensitive details'})
@@ -299,7 +331,114 @@ def test_tampering_missing_object_and_review_race(api, cloud):
     cloud.race = True
     assert api.post(path, headers=headers('admin'), json={}).status_code == 409
     assert cloud.documents[doc_id]['review_status'] == 'pending'
-    assert cloud.events == ['document_uploaded']
+    assert cloud.events == ['document_uploaded', 'document_integrity_failure', 'document_integrity_failure']
+    assert {e['reason'] for e in cloud.integrity_events.values()} == {
+        'SHA-256 mismatch detected', 'Stored object is missing'}
+
+
+def test_integrity_failure_persists_exact_safe_reviewer_event(api, cloud):
+    import json
+
+    doc_id = upload(api, data=b'original private file bytes').json()['id']
+    cloud.objects[next(iter(cloud.objects))] = b'tampered private file bytes'
+    path = f'/api/v1/documents/{doc_id}/approve'
+    assert api.post(path, headers=headers('student'), json={}).status_code == 403
+    assert api.post(path, json={}).status_code == 401
+    assert not cloud.integrity_events
+    assert api.post(path, headers=headers('admin'), json={}).status_code == 409
+    assert cloud.documents[doc_id]['review_status'] == 'pending'
+    assert cloud.documents[doc_id]['reviewed_by'] is None
+    assert len(cloud.integrity_events) == 1
+    event = next(iter(cloud.integrity_events.values()))
+    UUID(event['id'])
+    assert event == {'id': event['id'], 'user_id': ADMIN, 'document_id': doc_id,
+                     'event_type': 'document_integrity_failure', 'decision': 'deny',
+                     'reason': 'SHA-256 mismatch detected'}
+    encoded = json.dumps(event)
+    for forbidden in ('private file bytes', 'sb_secret_', 'sb_publishable_', 'storage_path', 'Authorization'):
+        assert forbidden not in encoded
+    assert not any(call.url.path.endswith('/shield_review_document') for call in cloud.calls)
+
+
+def test_lost_audit_acknowledgement_retries_same_server_id_once(api, cloud):
+    import json
+
+    doc_id = upload(api).json()['id']
+    cloud.objects[next(iter(cloud.objects))] = b'tampered'
+    cloud.audit_failure = 'lost_response'
+    assert api.post(f'/api/v1/documents/{doc_id}/approve', headers=headers('admin'), json={}).status_code == 409
+    attempts = [json.loads(r.content)['p_event_id'] for r in cloud.calls
+                if r.url.path.endswith('/shield_record_integrity_failure')]
+    assert len(attempts) == 2 and len(set(attempts)) == 1
+    assert len(cloud.integrity_events) == 1
+    assert cloud.documents[doc_id]['review_status'] == 'pending'
+
+
+@pytest.mark.parametrize('failure,count,attempts', [('database', 0, 1), ('unavailable', 0, 2),
+                                                   ('malformed_ack', 1, 2)])
+def test_unconfirmed_integrity_audit_fails_closed(api, cloud, caplog, failure, count, attempts):
+    doc_id = upload(api).json()['id']
+    cloud.objects[next(iter(cloud.objects))] = b'tampered'
+    cloud.audit_failure = failure
+    response = api.post(f'/api/v1/documents/{doc_id}/approve', headers=headers('admin'), json={})
+    assert response.status_code == 503
+    assert response.json()['detail'] == 'Integrity audit could not be confirmed; approval denied'
+    assert cloud.documents[doc_id]['review_status'] == 'pending'
+    assert cloud.documents[doc_id]['reviewed_by'] is None
+    assert len(cloud.integrity_events) == count
+    assert sum(r.url.path.endswith('/shield_record_integrity_failure') for r in cloud.calls) == attempts
+    assert not any(r.url.path.endswith('/shield_review_document') for r in cloud.calls)
+    assert 'persistence unconfirmed' in caplog.text
+    assert 'sensitive' not in response.text + caplog.text
+
+
+def test_separate_http_review_attempts_are_distinct_audit_events(api, cloud):
+    doc_id = upload(api).json()['id']
+    cloud.objects[next(iter(cloud.objects))] = b'tampered'
+    for _ in range(2):
+        assert api.post(f'/api/v1/documents/{doc_id}/approve', headers=headers('admin'), json={}).status_code == 409
+    assert len(cloud.integrity_events) == 2
+    assert cloud.documents[doc_id]['review_status'] == 'pending'
+
+
+@pytest.mark.parametrize('status,payload,expected,reason', [
+    (400, {'statusCode': '404', 'error': 'not_found', 'message': 'sensitive'}, 409, 'Stored object is missing'),
+    (400, {'statusCode': '400', 'error': 'BadRequest', 'message': 'sensitive'}, 503, None),
+    (403, {'message': 'sensitive'}, 503, None), (500, {'message': 'sensitive'}, 503, None)])
+def test_only_confirmed_storage_failure_is_audited(api, cloud, status, payload, expected, reason):
+    doc_id = upload(api).json()['id']
+    cloud.storage_response = status, payload
+    response = api.post(f'/api/v1/documents/{doc_id}/approve', headers=headers('admin'), json={})
+    assert response.status_code == expected
+    assert cloud.documents[doc_id]['review_status'] == 'pending'
+    assert len(cloud.integrity_events) == (1 if reason else 0)
+    if reason:
+        assert next(iter(cloud.integrity_events.values()))['reason'] == reason
+    assert 'sensitive' not in response.text
+
+
+@pytest.mark.parametrize('field', ['event_type', 'event_id', 'decision', 'user_id'])
+def test_client_cannot_choose_integrity_event_fields(api, cloud, field):
+    doc_id = upload(api).json()['id']
+    response = api.post(f'/api/v1/documents/{doc_id}/approve', headers=headers('admin'), json={field: 'untrusted'})
+    assert response.status_code == 422 and not cloud.integrity_events
+
+
+@pytest.mark.parametrize('failure,reason', [
+    ('hash_missing', 'Stored SHA-256 is missing'), ('oversized', 'Stored object exceeds size limit'),
+    ('invalid_reference', 'Stored object reference is invalid')])
+def test_other_confirmed_integrity_failures_are_safely_audited(api, cloud, failure, reason):
+    doc_id = upload(api).json()['id']
+    if failure == 'hash_missing':
+        cloud.documents[doc_id]['sha256'] = None
+    elif failure == 'oversized':
+        cloud.objects[next(iter(cloud.objects))] = b'a' * (MAX_FILE_BYTES + 1)
+    else:
+        cloud.documents[doc_id]['storage_path'] = 'invalid/reference.txt'
+    assert api.post(f'/api/v1/documents/{doc_id}/approve', headers=headers('admin'), json={}).status_code == 409
+    assert cloud.documents[doc_id]['review_status'] == 'pending'
+    assert len(cloud.integrity_events) == 1
+    assert next(iter(cloud.integrity_events.values()))['reason'] == reason
 
 
 def test_retrieval_catalog_excludes_pending_rejected_and_student_restricted(api, cloud):

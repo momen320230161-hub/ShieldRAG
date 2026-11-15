@@ -1,4 +1,5 @@
 """Trusted server writes. This adapter never accepts a key from an HTTP client."""
+import json
 import re
 from uuid import UUID
 
@@ -16,6 +17,14 @@ class DocumentServiceError(HTTPException):
     def __init__(self, status_code: int, detail: str, *, definite_failure=False):
         super().__init__(status_code, detail)
         self.definite_failure = definite_failure
+
+
+class DocumentIntegrityError(HTTPException):
+    """A confirmed integrity failure, distinct from unavailable infrastructure."""
+
+    def __init__(self, failure: str, detail: str):
+        super().__init__(409, detail)
+        self.failure = failure
 
 
 def object_key(user_id: UUID, document_id: UUID, extension: str) -> str:
@@ -119,22 +128,57 @@ class DocumentStore:
         extension = key.rsplit('.', 1)[-1]
         if (extension not in ('pdf', 'txt') or key != object_key(
                 UUID(document['uploaded_by']), UUID(document['id']), extension)):
-            raise HTTPException(409, 'Document storage reference is invalid')
+            raise DocumentIntegrityError('invalid_storage_reference', 'Document storage reference is invalid')
         try:
             async with self.client.stream('GET', self.settings.supabase_url +
                     f'/storage/v1/object/authenticated/{BUCKET}/{key}', headers=headers) as response:
-                if response.status_code == 404:
-                    raise HTTPException(409, 'Stored document is missing')
+                if await self._object_missing(response):
+                    raise DocumentIntegrityError('stored_object_missing', 'Stored document is missing')
                 if response.status_code >= 300:
                     raise HTTPException(503, 'Document service unavailable')
                 result = bytearray()
                 async for chunk in response.aiter_bytes(65536):
                     result.extend(chunk)
                     if len(result) > MAX_FILE_BYTES:
-                        raise HTTPException(409, 'Stored document exceeds limit')
+                        raise DocumentIntegrityError('stored_size_exceeded', 'Stored document exceeds limit')
                 return bytes(result)
         except httpx.RequestError:
             raise HTTPException(503, 'Document service unavailable') from None
+
+    @staticmethod
+    async def _object_missing(response: httpx.Response) -> bool:
+        if response.status_code == 404:
+            return True
+        if response.status_code != 400:
+            return False
+        # Storage may report NoSuchKey as HTTP 400 with a 404 payload. Inspect
+        # only bounded error codes; never echo/log its body or free-form message.
+        data = bytearray()
+        async for chunk in response.aiter_bytes(4096):
+            data.extend(chunk)
+            if len(data) > 4096:
+                return False
+        try:
+            error = json.loads(data)
+        except ValueError:
+            return False
+        return (isinstance(error, dict) and str(error.get('statusCode')) == '404'
+                and error.get('error') in ('not_found', 'NoSuchKey', 'NotFound'))
+
+    async def record_integrity_failure(self, principal: Principal, document: dict,
+                                       event_id: UUID, failure: str, observed_sha256: str | None):
+        response = await self._request('POST', '/rest/v1/rpc/shield_record_integrity_failure',
+            principal, admin=True, json={
+                'p_actor': str(principal.user.id), 'p_document_id': document['id'],
+                'p_event_id': str(event_id), 'p_failure': failure,
+                'p_expected_sha256': document['sha256'], 'p_storage_path': document['storage_path'],
+                'p_observed_sha256': observed_sha256})
+        try:
+            confirmed = response.json()
+        except ValueError:
+            raise HTTPException(503, 'Integrity audit acknowledgement is invalid') from None
+        if confirmed != str(event_id):
+            raise HTTPException(503, 'Integrity audit acknowledgement is invalid')
 
     async def review(self, principal: Principal, document_id: UUID, decision: str,
                      sha256: str | None, reason: str | None):

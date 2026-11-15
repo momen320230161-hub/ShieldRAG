@@ -1,4 +1,41 @@
-# Task 03 verification — 2026-11-15
+# Task 03.1 verification — 2026-11-15
+
+## Current final results
+
+- Complete suite: **158 passed, 0 skipped** in 60.24 seconds: **137 mocked/unit/orchestration tests and 21 real Supabase integration tests**. Existing upload, successful review, Auth, RLS, pending/rejected isolation and restricted/vector-RPC checks remain passing.
+- Actual upload and deliberate Storage tampering produced HTTP 409, kept the document pending with no reviewer, and persisted exactly one `document_integrity_failure / deny / SHA-256 mismatch detected` event with the authenticated Admin reviewer ID and affected document ID. The event contains only the declared audit fields, not content or sensitive request data.
+- A real missing-object check also returned 409 and persisted the fixed missing-object event. Generic infrastructure errors remain service failures rather than confirmed integrity events.
+- The fault-injected live test forwarded real Supabase traffic, dropped one successful audit response after commit, and observed two backend write attempts using one UUID and exactly one persisted row. Additional real server-RPC replays preserved that single row; reusing its ID for another document returned a conflict.
+- Real Student and Admin user JWTs were denied direct audit RPC execution and event insertion. Attempts to update the event did not change it; an independent Admin read verified its exact original fields. Unauthorized Student approval created no integrity event.
+- Unit tests passed for failed database writes, unavailable audit service, malformed/lost acknowledgements, static event fields, forbidden client fields, other confirmed integrity failures and pending-state preservation. An unconfirmed audit returns 503 and never invokes successful approval.
+- `tests/integrity_audit_rollback.sql` passed against the actual database: trusted actor and document association, fixed failure kinds, mismatch evidence, deduplication, user-write denial, and unchanged pending state. All its fixtures rolled back.
+- Applied/exported **`20261115130214_shieldrag_integrity_failure_audit`**. It adds one SECURITY INVOKER function with an empty fixed search path and service_role-only EXECUTE. Direct grant checks confirmed anon/authenticated cannot execute it and security_events RLS remains enabled. No table, policy, original migration, or ingestion route was recreated or weakened.
+- Independent post-teardown checks returned **0 remaining ingestion Storage objects, 0 ingestion metadata rows, and 0 ingestion audit events**. Matching guarded account/document/chunk cleanup returned **remaining_fixture_rows = 0**. The private manifest was removed only after that confirmation; the ingestion journal was already removed after successful teardown.
+- `pip check` passed. The latest Supabase Security Advisor returned **no findings**. One existing upstream AnyIO/Starlette test-client deprecation warning remains.
+
+## Exact reproduction
+
+Generate a fresh private fixture run and apply its setup using the authorized operator procedure in [testing.md](testing.md). From `backend/`, the successful command was:
+
+```powershell
+$env:SHIELDRAG_INTEGRATION = '1'
+$env:SHIELDRAG_LIVE_FIXTURES = '1'
+$env:SHIELDRAG_INGESTION = '1'
+$env:SHIELDRAG_FIXTURE_MANIFEST = '.integration/task031-verified-20261115/manifest.json'
+.venv/Scripts/python -m pytest -q -p no:cacheprovider --tb=short
+```
+
+That run has been cleaned up; use a new directory/manifest for reproduction. Ingestion teardown removes exact objects and audit rows, then the original guarded SQL removes the remaining fixture accounts/documents/chunks. Never commit generated files or credentials.
+
+## Readiness and remaining limits
+
+No local/cloud acceptance blocker remains. Changes stay on `feat/secure-document-ingestion` and update existing PR #2; merge remains manual after final code review and CI. Task 04 is not started.
+
+Audit writes are separate committed transactions from the rejected approval. If both acknowledgements are lost, the event may already exist while the API returns 503; the UUID-only log supports investigation. Only internal retries share an event ID; separate HTTP attempts are separate observations. A persistent database outage cannot be made durably auditable by this request alone: it stays denied with 503 and an operational log, without a new retry queue or unrelated reconciliation feature. Existing upload partial-failure limits remain documented.
+
+**Task 04 must independently revalidate stored SHA-256 immediately before text extraction, chunking or indexing.** Prior approval does not guarantee future Storage immutability. None of those features is implemented here.
+
+## Historical Task 03 verification — 2026-11-15
 
 ## Current results
 
