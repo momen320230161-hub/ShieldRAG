@@ -22,6 +22,8 @@ begin
             insert into public.documents(uploaded_by, original_name, storage_path, sha256, visibility, review_status)
             values(student_id, 'synthetic.txt', gen_random_uuid()::text, repeat('a', 64), visibility_value, status_value)
             returning id into doc_id;
+            update public.documents set index_status='indexed',indexed_sha256=sha256,
+                embedding_model='synthetic-fixture-model',external_processing_authorized=true where id=doc_id;
             fixture_documents := array_append(fixture_documents, doc_id);
             insert into public.document_chunks(document_id, chunk_index, content, embedding)
             values(doc_id, 0, 'synthetic', array_fill(1.0, array[768])::extensions.vector);

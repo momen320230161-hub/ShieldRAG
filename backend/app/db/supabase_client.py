@@ -12,14 +12,22 @@ class SupabaseGateway:
         self.settings = settings
 
     async def get(self, path: str, token: str, params: dict | None = None):
+        return await self._request('GET', path, token, params=params)
+
+    async def rpc(self, name: str, token: str, body: dict):
+        if name != 'match_shield_chunks':
+            raise ValueError('Unsupported user RPC')
+        return await self._request('POST', '/rest/v1/rpc/' + name, token, json=body)
+
+    async def _request(self, method: str, path: str, token: str, **kwargs):
         try:
-            response = await self.client.get(
+            response = await self.client.request(method,
                 self.settings.supabase_url + path,
                 headers={
                     'apikey': self.settings.supabase_publishable_key.get_secret_value(),
                     'Authorization': f'Bearer {token}',
                 },
-                params=params,
+                **kwargs,
             )
         except httpx.RequestError:
             raise HTTPException(503, 'Supabase unavailable') from None
