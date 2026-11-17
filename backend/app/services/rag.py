@@ -69,6 +69,16 @@ async def ask(gateway, gemini, principal, question, settings):
         return abstain
     answer = await gemini.generate(question.question,
         [{'source_id': i, 'text': m.content, 'document_name': m.document_name} for i, m in enumerate(matches)])
+    return await validate_answer(gateway,principal,matches,answer,settings)
+
+
+def valid_evidence(answer,matches):
+    return bool(answer.evidence) and all(not isinstance(e.source_id,bool) and 0<=e.source_id<len(matches)
+        and bool(e.quote.strip()) and e.quote in matches[e.source_id].content for e in answer.evidence)
+
+
+async def validate_answer(gateway,principal,matches,answer,settings):
+    abstain=AskResult(answer=ABSTENTION,supported=False,citations=[])
     if not answer.supported or not answer.answer.strip() or not answer.evidence:
         return abstain
     citations = []

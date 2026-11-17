@@ -34,7 +34,7 @@ These routes remain absent from OpenAPI and return 404/405:
 | `POST /api/v1/chat/ask` | JSON `{question:string,session_id?:UUID}` (1–4000 characters) | `200 {session_id,answer,citations:[{document_id,chunk_id,page_number}]}` | Session ownership; approved user-scoped chunks; Student public-only |
 | `POST /api/v1/evaluations/run` | JSON `{configuration:"baseline"|"secure"}` | `202 {id,status:"queued"}` | Admin; synthetic data; isolated jobs |
 
-Task 04 implements the stateless RAG routes below. Session persistence, evaluation and the AI Security Agent remain future work.
+Task 04 implements stateless baseline RAG. Task 05 adds the secure route described below. Session persistence and a research-grade evaluation service remain future work.
 
 ## Baseline RAG routes
 
@@ -47,3 +47,17 @@ Task 04 implements the stateless RAG routes below. Session persistence, evaluati
 Questions are 1–1,800 UTF-8 bytes; top_k defaults to 5 and is bounded 1–10. Extra fields are rejected. JSON body limit 8 KiB, including streamed bodies. Validation returns `422 {detail:"Invalid request fields or limits"}` without echoing input. Index consent is explicit and mandatory; false/omitted consent fails. Student indexing is 403; unapproved/concurrent/integrity conflicts are 409. Missing/hidden document is 404. Provider, timeout and uncertain commit failures are sanitized 503.
 
 Search returns an empty list below the configured threshold. Ask without usable supporting evidence returns `supported:false`, empty citations and `The answer cannot be determined from the available authorized documents.` No generation call occurs when search has no matches. PDF `page` is 1-based; TXT is null. Generated IDs are never accepted as database citations. These APIs do not create chat sessions or return signed Storage URLs. See [RAG architecture and limitations](rag.md).
+
+## Secure RAG
+
+`POST /api/v1/rag/secure-ask` accepts the same `Question` shape and limits as baseline ask. Extra role/mode/model fields remain forbidden. It uses the same authenticated identity, trusted profiles, caller-scoped RLS and citation checks; it never uses a service credential for retrieval.
+
+Successful response example:
+
+```json
+{"decision":"allow","status":"answered","answer":"The archive opens at nine.","supported":true,"citations":[{"chunk_id":"00000000-0000-0000-0000-000000000001","document_id":"00000000-0000-0000-0000-000000000002","document_name":"synthetic.txt","page":null,"quote":"The archive opens at nine."}],"security":{"threat_detected":false,"risk_level":"low","threat_category":"none","reason_code":"no_threat_detected"}}
+```
+
+`answered` responses require validated nonempty citations; IDs above are synthetic examples. Insufficient evidence returns 200, decision allow, status `insufficient_evidence`, the fixed abstention, supported false and empty citations. A security denial returns 200 with decision `block` or `review`, status `blocked`, answer null, supported false and empty citations. Public reasons are coarse `unsafe_input`, `unsafe_context`, `unsafe_output` or `security_review`; no detector patterns, numeric margins or model features are exposed. Risk levels are policy labels, not calibrated probabilities.
+
+Provider, required-model, internal-security or unconfirmed-audit failures return **503** with decision review, status `unavailable`, answer null, supported false, empty citations and reason `security_unavailable`. These are distinct from security denials and insufficient evidence. Auth failures remain 401/403; validation remains sanitized 422; all secure POST bodies are bounded to 8 KiB, including streamed input. Any ambiguous review is non-allow. See [Security Agent](security-agent.md) for the block-all-on-unsafe-context policy and measured limitations.

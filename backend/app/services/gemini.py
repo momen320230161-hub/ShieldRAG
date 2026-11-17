@@ -30,6 +30,11 @@ ANSWER_SCHEMA = types.Schema(type='OBJECT', properties={
         required=['source_id', 'quote']))}, required=['supported', 'answer', 'evidence'])
 
 
+class UnsafeGeneratedAnswer(HTTPException):
+    def __init__(self):
+        super().__init__(503,'Unsafe generated answer response')
+
+
 def reject_credentials(text: str, settings: Settings):
     if re.search(r'(?:sb_secret_[A-Za-z0-9_-]{8,}|AIza[A-Za-z0-9_-]{20,}|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)', text):
         raise HTTPException(422, 'Operational credentials cannot be processed')
@@ -128,5 +133,5 @@ class GeminiService:
         try:
             reject_credentials(result.model_dump_json(), self.settings)
         except HTTPException:
-            raise HTTPException(503, 'Unsafe generated answer response') from None
+            raise UnsafeGeneratedAnswer() from None
         return result

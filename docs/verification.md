@@ -1,4 +1,61 @@
-# Task 04.1 verification - 2026-11-15
+# Task 05 verification - completion 2026-11-17
+
+## Executed checks
+
+- Complete regression/live suite: **296 passed, 0 skipped** in **803.36 seconds**: **254 local/unit/mocked tests and 42 real cloud integration tests**. This preserves the previous 208 local/33 cloud tests and adds 46 local/9 cloud security cases.
+- Final local regression after audit-error-phase clarification and prioritizing confirmed context blocks over earlier reviews: **254 passed, 42 deselected** in **17.84 seconds**. Those 42 deselections were not counted as new passes; their actual cloud execution is the complete run above. The cloud suite was not repeated solely for these locally verified refinements or offline report-denominator correction, avoiding unnecessary billable calls.
+- Existing Auth, trusted Student/Admin roles, private ingestion/review, original/index SHA verification, atomic publication, RLS, cached-index protection, real Gemini embedding/generation and page citations remain passing. Secure and baseline share caller-token search and source/citation revalidation; no service-role retrieval was introduced.
+- New local checks cover benign English/Arabic security questions, direct/indirect/encoded/Unicode attacks, output credentials and operational-prompt fragments, group isolation, model provenance, no request-time fitting, missing/corrupt bundles, runtime failure, review/deny-before-embedding, unsafe-context-before-generation, fabricated evidence, malformed/provider output, audit failure, role spoofing/revocation and body limits. An unavailable audit withholds even an otherwise safe answer.
+- New real cloud cases verified five input denials without an embedding call, genuine persisted audits, forged-token rejection, Student/Admin denial of direct audit-RPC invocation, UUID replay with one row, paired public answers for both roles, Admin restricted answers and Student restricted-target exclusion. Existing cloud tests additionally verify pending/rejected/processing/failed isolation.
+- The real indirect-source canary did not appear in either pipeline's returned answer. Baseline made one logical generation call; secure blocked the unsafe source before generation and made zero. This is a single smoke case, not a demonstrated real-world attack-success-rate improvement. Real paired statuses and timings are recorded without raw responses in `backend/security_evaluation/paired-live-report.json`.
+- All **six** real SQL rollback suites passed: RLS, ingestion, integrity audit, atomic RAG, cached indexing and new security-agent auditing. The new suite verified narrow grants, registered actor/current visible-document association, fixed reasons/policy version, idempotent UUIDs, conflicting replay rejection and user-write denial. All synthetic rows rolled back.
+- New forward migration **`20261115202657_shieldrag_security_agent_audit`** adds one SECURITY INVOKER RPC with empty fixed search_path, service_role-only EXECUTE and no RLS/table changes. Direct inspection confirmed anon/authenticated cannot execute it. Existing applied migrations were not edited or replayed. Deployed/local normalized SQL digest matched: `063a84b8223c664fa9066ad2a44bdab4`. The existing unavailable-Windows-CLI fallback used the connected migration tool and retained its server-generated version.
+- After fixture teardown, independent SQL confirmed **0 uploaded synthetic documents, 0 Storage objects and 0 security events** for the run. Guarded account/document/chunk cleanup returned **remaining_fixture_rows = 0**. Security/RAG/ingestion journals were removed only after successful scoped teardown; the private password manifest was removed after independent cleanup confirmation. Auth-managed audit retention was unchanged.
+- `pip check`, diff checks and deliverable secret scans passed. Actual environment keys and synthetic passwords are not in deliverables. The untracked `docs/orchestrator-handoff.md` is preserved unchanged (SHA-256 `B431284A8C251AC0773046AABD9B944EBF010304AE966680E6B340359533C06F`) and is not included in the Task 05 commit.
+- The latest recorded Security Advisor response returned **no findings**. An earlier Task 05 response reported the existing Leaked Password Protection Disabled warning; this task did not change Auth settings, and an empty later response is not proof that Auth configuration was changed. Operators should confirm the configured protection independently. One existing AnyIO/Starlette deprecation warning remains.
+
+## Frozen classifier and policy measurements
+
+- Version `shield-security-v1`: binary **Logistic Regression**, scikit-learn **1.9.1**, word/character TF-IDF, seed **1729**, JSON numerical artifact **387,493 bytes**, SHA-256 recorded in its bundled manifest. No pickle/joblib/user-uploaded model deserialization. Fixed reconstruction and score parity against the trained estimator were verified.
+- Dataset: **237 project-authored synthetic examples**. Training: 78 benign/63 malicious; validation: 27/21; final test: 24/24. Known family/paraphrase grouping precedes TF-IDF fitting. Development prose extensions remain train/validation-only; original final-test IDs were preserved. No external benchmark or private traffic was used.
+- Logistic Regression and Linear SVM tied on final validation macro-F1 **0.9161**, so declared candidate order selected Logistic Regression. Threshold selection uses validation only, not training accuracy or test results. Block margin **-0.0377009765**, review threshold **-0.2877009765**; margins are uncalibrated, and review never permits generation.
+- Classifier-only held-out precision/recall/F1 **0.875**, confusion matrix **[21,3;3,21]**, FPR **12.5%**, FNR **12.5%**. The full rules+classifier policy, counting review as non-allow, had precision **0.7742**, recall **24/24 on this small set**, F1 **0.8727**, confusion matrix **[17,7;0,24]**, FPR **29.17%**. This is not a guarantee of zero missed attacks.
+- Representative classifier false positives: benign database-system and trusted-authorization coursework. Representative misses: another student's private-history request and a fake root-authority source. Full policy caught those particular examples through rules/review; unknown variants remain unproved. Model/agent reports include synthetic examples and per-kind counts.
+- Warm measured classifier latency averaged about **1.02 ms**, p95 **1.35 ms**; full rule+classifier about **1.23 ms**, p95 **1.19 ms**, without network. These are local observations, not production performance targets.
+
+## Paired comparison limitations
+
+The controlled mocked-generator harness used 5 attack and 3 benign cases plus authorization/no-context controls. Baseline/secure canary success was **4/5 versus 1/5**; agent-style detection **0/5 versus 4/5**; benign answer availability **3/3 versus 1/3**, and secure benign refusals **2/3**. Citation validity among responses actually containing citations was **7/7 versus 2/2**; empty abstentions were excluded. Both had zero authorization failures. Logical embedding/generation method calls were **10/7 versus 7/2**; monetary costs, physical retries and token usage were not measured.
+
+This deliberately vulnerable mock generator is not real Gemini attack-success evidence. Its surviving output-contamination attack and high false positives are material limitations. Real paired Gemini smoke cases succeeded for permitted benign requests, and the single indirect canary appeared in neither pipeline. Results are local public synthetic JSON; database evaluation persistence and comprehensive independent benchmarking are deferred to Task 06. Test metrics were observed during development but did not fit features or select candidates/thresholds; this is not a newly blinded external benchmark.
+
+## Exact commands and delivery
+
+From `backend/`, local training/evaluation commands actually executed:
+
+```powershell
+.venv/Scripts/python -m scripts.train_security
+.venv/Scripts/python -m scripts.evaluate_security
+.venv/Scripts/python -m scripts.compare_security
+```
+
+After preparing/applying the fresh `.integration/task05-live/setup.sql` through the authorized operator, the complete run used:
+
+```powershell
+$env:SHIELDRAG_INTEGRATION='1'
+$env:SHIELDRAG_LIVE_FIXTURES='1'
+$env:SHIELDRAG_INGESTION='1'
+$env:SHIELDRAG_RAG='1'
+$env:SHIELDRAG_SECURITY_LIVE='1'
+$env:SHIELDRAG_FIXTURE_MANIFEST=(Resolve-Path .integration/task05-live/manifest.json).Path
+.venv/Scripts/python -m pytest -q -p no:cacheprovider --basetemp=.integration/task05-full-1 --tb=short
+```
+
+That run is cleaned up; generate a new directory as described in [testing](testing.md). Never reuse the removed accounts/manifest or replay applied schema migrations. The final local command was `.venv/Scripts/python -m pytest -q -m 'not integration' -p no:cacheprovider --basetemp=.integration/task05-unit-review-final --tb=short`.
+
+Feature branch: `feat/ai-security-agent`, based on synchronized main `7c02d49`. Baseline `/api/v1/rag/ask` remains; new `/api/v1/rag/secure-ask` is authenticated and independently testable. See [Security Agent architecture and limits](security-agent.md), [contracts](api-contracts.md), [setup](backend-setup.md) and [security](security.md). No frontend, Task 06 implementation, database reset or automatic merge is included. The implementation is suitable for manual experimental review; the measured false-positive and residual-attack results do not justify production-grade protection claims.
+
+## Historical Task 04.1 verification - 2026-11-15
 
 ## Final results
 
