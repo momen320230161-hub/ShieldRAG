@@ -4,14 +4,20 @@ The fixed, previously inspected 48-row synthetic test retained its exact rows, l
 
 The original controlled `output_contamination` case generated once and was blocked at output for `invalid_source_support`: a valid quote did not contain the proposed answer. Secure mock attack success fell from **1/5 to 0/5**, and benign supported answers rose from **1/3 to 2/3**. Baseline stayed at **4/5** and **3/3**, respectively. The Arabic mock benign case still received context review. The secure pipeline verified exact answer spans, citations and current source access. The invariant does not establish semantic entailment. These are development comparisons, with no independent benchmark.
 
-The final local run passed **277 tests** with **43 integration cases deselected**. The separately executed live subset is recorded below. The run includes the exact-output invariant, original controlled failure, valid-quote laundering, benign multilingual and security education, unchanged caller-JWT access, fail-closed provider/model/audit handling and concurrent request coverage. `pip check` reported no broken requirements.
+The post-live local run passed **277 tests**. The 43 integration cases were excluded from that command and verified in the two live runs below. Local tests cover the original mocked output-contamination case, quote laundering, invalid model artifacts, simulated provider and audit failures, and concurrent requests. `pip check` reported no broken requirements.
 
 ## Checks against real services
 
-- **4 passed** in the selected live HTTP run. One was a real Gemini extractive-generation test using one synthetic question/source and checking the returned answer span and quote. Three were real Supabase Auth/PostgREST checks covering health, rejection of a forged JWT and anonymous table access denial.
-- The remaining **39** collected integration cases were not run for Task 05.1, including the **nine** Student/Admin and paired role-aware security cases. Automatic approval review rejected the fixture setup because its transaction commits temporary Auth and database rows before HTTP tests and guarded cleanup. An independent read-only query using the exact synthetic fixture account IDs found zero users, profiles, documents, chunks, security events and Storage objects. The Task 05 live role/citation results below apply to the previous implementation.
+- Tested feature commit `2c20c74aa0bcee63777c51479ee778224d4e8e5e`. Collection found **43 live cases**. The owner-authorized run passed all **39 previously pending cases** in **289.13 seconds**, with **0 failures, 0 errors and 0 skipped**. That run covered eight ingestion, ten Auth and role-authorization, twelve RAG and nine role-aware security cases. The earlier same-commit run passed the four other cases: Gemini extractive generation, Supabase Auth health, forged JWT rejection and anonymous PostgREST denial. Across the two live runs, **43 passed** with no unexecuted cases. GitHub Backend checks passed on the tested feature commit in [run #22](https://github.com/momen320230161-hub/ShieldRAG/actions/runs/44161030126).
+- Student and Admin signed in with synthetic accounts. Auth verified signed JWTs and trusted profile roles despite forged role claims. Both RAG routes returned supported public answers for both roles and supported restricted answers for Admin. Both returned insufficient evidence for Student on the restricted target. Pending, rejected and invalid index states remained excluded. Citations were checked against caller-visible chunks by ID, quote and page, and supported secure answers matched a contiguous span of a validated quote.
+- Five direct injection attempts were denied before embedding. The indirect case was blocked before Secure RAG generation. Baseline made **one** logical generation call and Secure RAG made **zero** for that case. Neither returned the synthetic canary. The [paired live report](../backend/security_evaluation/paired-live-report.json) records observed responses and timing. Provider-wide call totals, physical SDK retries, token counts and monetary costs were not measured. The original output-contamination case and simulated unavailable-provider/model/audit regressions were exercised locally.
+- Live audits confirmed allowed and denied decisions, role JWT denial of direct privileged RPC execution, and same-UUID replay producing one event. The private run inventory observed four allow events, six direct-denial events (including the replay probe) and one indirect-denial event. The live direct-denial assertions checked for bounded policy reasons without raw attack prompts. Local simulated audit-failure tests verified that a required acknowledgement cannot be bypassed.
 - **6 SQL rollback suites passed** against the already migrated project: RLS, ingestion, integrity audit, RAG, cached index and security agent. The security suite covers audit RPC permissions and UUID replay. Security Advisor returned **zero findings** for this check.
-- No migration was added, edited or replayed. The deployed audit policy identifier, service-only write permission and caller-JWT retrieval are preserved.
+- All seven local migration versions and names matched the deployed history. The verification run required no implementation fixes, test assertion changes or migrations.
+
+## Fixture cleanup
+
+Preflight found no collisions with the new account, document, chunk or Storage identifiers. The project had zero existing documents. The inventory captured 31 synthetic document rows (six initial SQL fixtures and 25 uploaded documents), 19 chunks, 25 uploaded object paths and 91 application audit events. Existing fixture teardown and the guarded SQL cleanup ran successfully. The cleanup SQL returned zero fixture rows. Independent read-only queries for the run markers and exact observed IDs and paths found zero Auth users, profiles, identities, sessions, documents, chunks, app audit events and Storage objects. Document and chunk counts, the private bucket and Storage snapshot, RLS policies, table grants and RPC grants matched preflight. Platform-managed Auth audit logs retain their normal lifecycle. Private fixture credentials were discarded after independent verification.
 
 ## Reproduction
 
@@ -21,6 +27,12 @@ See [testing commands](testing.md) for local tests, report generation, the Gemin
 $env:SHIELDRAG_INTEGRATION='1'
 $env:SHIELDRAG_SECURITY_LIVE='1'
 .venv/Scripts/python -m pytest tests/test_security_integration.py tests/test_integration.py -k 'gemini_extractive_provider_only or auth_rejects_forged_jwt or postgrest_rejects_anonymous_table_access or auth_health' -q -p no:cacheprovider --tb=short
+```
+
+After the documented fixture setup and opt-in flags, run the remaining cases from `backend/`, then execute the matching guarded cleanup SQL and independently verify removal:
+
+```powershell
+.venv/Scripts/python -m pytest -m integration -k 'not (gemini_extractive_provider_only or auth_rejects_forged_jwt or postgrest_rejects_anonymous_table_access or auth_health)' -q -p no:cacheprovider --tb=short
 ```
 
 ## Historical Task 05 verification — 2026-11-17
