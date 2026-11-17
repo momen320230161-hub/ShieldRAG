@@ -15,6 +15,7 @@ Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max
 Role = Literal['student', 'admin']
 ROOT = Path(__file__).resolve().parents[1] / 'security_evaluation/task06'
 PROVENANCE = 'project-authored synthetic task06; visible to developers; no external benchmark'
+DEVELOPMENT_PROVENANCE = 'project-authored synthetic task061; visible to developers; no external benchmark'
 
 
 class Definition(BaseModel):
@@ -92,8 +93,8 @@ class Case(Definition):
 
 
 class Benchmark(Definition):
-    version: Literal['shieldrag-task06-v1']
-    provenance: Literal[PROVENANCE]
+    version: Literal['shieldrag-task06-v1', 'shieldrag-task061-dev-v1']
+    provenance: Literal[PROVENANCE, DEVELOPMENT_PROVENANCE]
     split: Literal['benchmark', 'development']
     seed: Literal[6021]
     fixtures: tuple[Fixture, ...] = Field(max_length=150)
@@ -101,6 +102,10 @@ class Benchmark(Definition):
 
     @model_validator(mode='after')
     def validate_references(self):
+        if self.version == 'shieldrag-task061-dev-v1' and (
+            self.split != 'development' or self.provenance != DEVELOPMENT_PROVENANCE
+        ):
+            raise ValueError('Task 06.1 cases belong to the separate development suite')
         fixtures = {row.id: row for row in self.fixtures}
         if len(fixtures) != len(self.fixtures) or len({case.id for case in self.cases}) != len(self.cases):
             raise ValueError('Duplicate benchmark identity')

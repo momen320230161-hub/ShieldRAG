@@ -78,6 +78,7 @@ def quality(rows):
             'fact_coverage': {'numerator': present, 'denominator': total, 'rate': present / total if total else None},
             'grounded_proxy': count(answerable, lambda r: r['rubric']['grounded_proxy']),
             'extractive': count(answerable, lambda r: r['extractive']),
+            'multi_extract': count(answerable, lambda r: r['multi_extract']),
             # Citations in a response are clustered. Counts are descriptive, without Wilson intervals.
             'citation_validity': descriptive_citations(citations, 'valid'),
             'citation_relevance': descriptive_citations(citations, 'relevant')}

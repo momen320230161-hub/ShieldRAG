@@ -12,7 +12,7 @@ from app.security.features import FEATURES, vectorizer
 
 VERSION='shield-security-v1'
 # The deployed audit RPC accepts VERSION as its schema/policy identifier.
-MODEL_REVISION='shield-security-calibration-1'
+MODEL_REVISION='shield-security-calibration-2'
 BUNDLE_DIR=Path(__file__).resolve().parent/'artifacts'
 
 
@@ -39,8 +39,14 @@ class Classifier:
             self.version=VERSION
             self.threshold=float(model['threshold'])
             self.review_threshold=float(model['review_threshold'])
+            stages=model['stage_thresholds']
+            if not isinstance(stages,dict) or set(stages)!= {'input','context'}:
+                raise ValueError('Stage policy schema')
+            self.stage_thresholds={stage: (float(cuts['threshold']),float(cuts['review_threshold']))
+                for stage,cuts in stages.items()}
             if (not math.isfinite(self.threshold) or not math.isfinite(self.review_threshold)
                     or not -100<self.review_threshold<self.threshold<100
+                    or any(not -100<review<block<100 for block,review in self.stage_thresholds.values())
                     or model['candidate'] not in ('logistic_regression','linear_svc')
                     or len(model['features'])!=2):
                 raise ValueError('Model schema')

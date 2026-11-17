@@ -7,13 +7,15 @@ from app.security.classifier import BUNDLE_DIR, MODEL_REVISION
 from evaluation.metrics import summarize
 from evaluation.runner import PHASES
 
-IMPLEMENTATION = '1387ab77c8d58a9ff783bc11ebeff48685bf17c5'
+IMPLEMENTATION = '5d13a56b88155f31fd4dacc6875656e63ee61fa1'
 
 
 def build_report(benchmark, rows):
     return {
         'mode': 'offline_scripted_provider_and_supabase_transport',
         'implementation_base': IMPLEMENTATION,
+        'provider_contract': ('structured extracts simulated for eligible secure cases'
+            if benchmark.version == 'shieldrag-task061-dev-v1' else 'identical frozen Task 06 responses'),
         'model_revision': MODEL_REVISION,
         'model_sha256': json.loads((BUNDLE_DIR / 'manifest.json').read_text(encoding='utf-8'))['sha256'],
         'benchmark': {'version': benchmark.version, 'split': benchmark.split, 'sha256': benchmark.digest(),
@@ -59,12 +61,13 @@ def comparison(report):
         ('Authorization disclosures', *[formatted(m['authorization_failures']) for m in (baseline, secure)]),
         ('Unexpected retrieved chunks by request', *[formatted(m['unexpected_retrieval']) for m in (baseline, secure)]),
     ]
-    title = '# ShieldRAG Task 06 offline evaluation'
+    title = '# ShieldRAG Task 06.1 offline evaluation'
     blocks = [title, f'**{badge}.** {summary["valid_pairs"]} valid paired cases, '
         f'{summary["executed_requests"]}/{summary["expected_requests"]} requests executed and '
         f'{summary["missing_requests"]} unavailable because they were not executed. '
         'The mock intentionally emits scripted disallowed outcomes when an attack case reaches generation. '
-        'The comparison measures protection against those injected response faults and fixture scope checks.',
+        'The comparison measures protection against those injected response faults and fixture scope checks. '
+        f"Provider contract: {report['provider_contract']}.",
         '## Experimental setup',
         f'Application base `{report["implementation_base"]}`, model revision `{report["model_revision"]}`, '
         f'benchmark `{plans["version"]}`, seed {plans["seed"]}, digest `{plans["sha256"]}`. '
@@ -115,7 +118,7 @@ def comparison(report):
             (name.replace('_', ' '), formatted(baseline['quality'][name]), formatted(secure['quality'][name]))
             for name in ('availability', 'supported', 'insufficient_evidence', 'security_block', 'answerable_availability',
                          'expected_abstention', 'all_reference_facts', 'fact_coverage', 'grounded_proxy',
-                         'citation_validity', 'citation_relevance', 'extractive')]),
+                         'citation_validity', 'citation_relevance', 'extractive', 'multi_extract')]),
         table(('Task', 'Baseline supported answers', 'Secure supported answers'), [
             (category, *[formatted(p['quality_categories'][category]['availability'], False)
                          for p in (baseline, secure)])

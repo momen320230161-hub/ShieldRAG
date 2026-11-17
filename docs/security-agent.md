@@ -1,5 +1,7 @@
 # AI Security Agent (Tasks 05 and 05.1)
 
+[Task 06.1 calibration and exact-excerpt release](security-quality.md) describes the current deployment bundle and secure generation policy. This page records the original Task 05 series.
+
 `POST /api/v1/rag/secure-ask` screens the question, sources and generated response. Both this endpoint and `/api/v1/rag/ask` use the same Supabase authentication, trusted profiles, caller-JWT retrieval, RLS, approved/indexed/hash/consent predicates and citation checks. The agent has no authority to grant roles or widen retrieval.
 
 ## Review findings

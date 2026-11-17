@@ -30,12 +30,13 @@ class SecurityAgent:
             model=self._model()
             rules=[inspect_rules(t,stage,self.settings) for t in texts]
             margins=model.margins([normalize(t) for t in texts])
+            block,review=model.stage_thresholds.get(stage,(model.threshold,model.review_threshold))
             decisions=[]
             for rule,margin in zip(rules,margins):
                 if rule is not None:
                     decisions.append(rule)
                     continue
-                action='block' if margin>=model.threshold else 'review' if margin>=model.review_threshold else 'allow'
+                action='block' if margin>=block else 'review' if margin>=review else 'allow'
                 category='none' if action=='allow' else 'indirect_prompt_injection' if stage=='context' else (
                     'output_policy_violation' if stage=='output' else 'direct_prompt_injection')
                 decisions.append(Decision(action,category,'no_threat_detected' if action=='allow' else

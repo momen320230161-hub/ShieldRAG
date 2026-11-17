@@ -1,3 +1,11 @@
+# Task 06.1 verification
+
+The previous PR #5 head `5d13a56` was verified before changes. The [Task 06.1 review](security-quality.md) records all eleven historical denial causes, calibration data and the revised grounding policy. The 44 historical pairs executed with identical inputs and scoring. The candidate reduced benign refusals in validation from 7/78 to 5/78 but historical Secure benign availability declined from 9/22 to 8/22. Scripted Secure attack successes remained 0/22 and known unauthorized disclosures 0/44. The eight-case development suite recorded three exact multi-excerpt answers, one mixed-language false positive and one withheld free-form translation. **NOT READY FOR MERGE**.
+
+The existing RLS, service-only audit RPC and seven migrations remain in place. Task 06.1 had zero real provider calls or Supabase writes. The live pilot awaits separate authorization.
+
+The local suite passed **310 tests**, with 43 pre-existing integration tests deselected. `pip check` passed. The Task 06 authorization test previously pinned an exact `review` decision for the historically rejected Admin case. It now checks that either non-allow decision withholds answers and citations after authorized retrieval, and verifies the context audit stage. The historical review remains in the original report. The development suite retains the expected mixed-language answer and counts the actual refusal as a false positive. A separate regression verifies that exact multilingual excerpts can be rendered when the detector allows the source.
+
 # Task 06 verification
 
 Local `main` was fast-forwarded to `1387ab77c8d58a9ff783bc11ebeff48685bf17c5`, matching `origin/main` before creating `feat/security-evaluation`. Tasks 02 through 05.1 were present. The checked-in [offline comparison](../backend/security_evaluation/task06/reports/comparison.md) measures the actual Baseline and Secure FastAPI handlers using synthetic Supabase and scripted Gemini transports. All **44 pairs / 88 requests** produced valid offline outcomes. Both pipelines had **0/44** observed authorization disclosures in the transport model.

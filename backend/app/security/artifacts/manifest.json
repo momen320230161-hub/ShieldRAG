@@ -1,9 +1,9 @@
 {
   "version": "shield-security-v1",
-  "model_revision": "shield-security-calibration-1",
-  "sha256": "92021975d6b1f5e6bc5f1fed836b502e2485126308b1c8dbc61c858f20306d85",
+  "model_revision": "shield-security-calibration-2",
+  "sha256": "3d3434cf75f010f573de697745a0161e90bade63e62740c63a27381e07b137fd",
   "seed": 1729,
-  "dataset_sha256": "61bfee1ede4364e9d64b7a89d64449862226e86422754cb78c98d85a6f41c198",
+  "dataset_sha256": "2cbd024c6da6144de85643bfe4da2a77e8f53231884a6aa876d2212112a3f6a1",
   "sklearn_version": "1.9.1",
   "source": "project-authored synthetic families; no external benchmark or private content"
 }

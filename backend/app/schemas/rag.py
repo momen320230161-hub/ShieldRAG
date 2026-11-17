@@ -76,3 +76,7 @@ class GeneratedAnswer(BaseModel):
     supported: bool
     answer: str = Field(max_length=4000)
     evidence: list[Evidence] = Field(max_length=10)
+
+
+class SecureGeneratedAnswer(GeneratedAnswer):
+    mode: Literal['extracts'] | None = None

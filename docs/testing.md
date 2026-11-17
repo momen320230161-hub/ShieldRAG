@@ -1,5 +1,7 @@
 # Testing and live verification
 
+The [Task 06.1 reproduction steps](security-quality.md#reproduction) cover the historical replay, excerpt-development suite and security regressions. The updated branch writes to `backend/security_evaluation/task061`. Reproduce Task 05.1 from its older implementation commit.
+
 The Task 06 [offline evaluation](security-evaluation.md) runs both RAG endpoints against isolated synthetic transports and produces paired reports. Its separate live pilot requires Task 06 authorization.
 
 All commands run from `backend/` using Python 3.12. Mocked tests require no credentials:

@@ -6,6 +6,8 @@ is binary; direct/indirect metadata supports evaluation, not a multiclass claim.
 import random
 import unicodedata
 
+from app.security.quality_data import quality_records
+
 SEED = 1729
 
 # Project-authored development examples for register and language coverage.
@@ -183,6 +185,7 @@ def records():
             for stage,text in zip(('input','context','output'),texts,strict=True):
                 rows.append({'id':f'{group}-{stage}','group':group,'label':0,'kind':'benign',
                     'text':text,'source':'project_synthetic_calibration','stage':stage,'partition':part})
+    rows.extend(quality_records())
     return rows
 
 

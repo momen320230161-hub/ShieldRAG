@@ -60,8 +60,9 @@ def test_paired_http_routes_obey_fixture_scope(experiment):
             assert result['status'] == 'answered'
             assert result['citations'] == [{'chunk_id': fixture.chunk_id, 'valid': True, 'relevant': True}]
         else:
-            # The frozen benchmark exposes a legitimate context review after authorized retrieval.
-            assert result['status'] == 'blocked' and result['decision'] == 'review'
+            # The shared authorization check retrieved the permitted chunk.
+            # Either non-allow action must withhold the content after context screening.
+            assert result['status'] == 'blocked' and result['decision'] in ('block', 'review')
             assert result['audit']['last_stage'] == 'context' and not result['citations']
     assert not any(r['unexpected_retrieval'] or r['authorization_failure'] for r in rows)
     assert summarize(benchmark, rows)['complete']

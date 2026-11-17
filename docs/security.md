@@ -1,5 +1,7 @@
 # Security architecture
 
+The [Task 06.1 security review](security-quality.md) documents current model selection, bounded exact excerpts, security controls and remaining semantic-grounding limits.
+
 Requests cross three boundaries: HTTP bearer authentication, trusted profile RBAC, and Supabase RLS. None of the read routes uses a secret or service-role key. A role is refreshed from trusted `profiles` data on each request, avoiding authorization based on stale JWT metadata. User-editable metadata, HTTP headers such as `X-Role`, and query parameters cannot promote an account. Task 03 adds a separate trusted server-write adapter for private Storage and tightly scoped registration/review RPCs after these authentication and permission checks.
 
 `require_admin` protects approval/rejection and indexing routes and remains reusable for future evaluation operations. The document list returns approved metadata; detail metadata follows uploader/Admin/approved-public RLS. RAG calls the user-scoped search RPC, requires approved and verified fully indexed sources, and rechecks current roles and sources before returning generated answers. `can_retrieve_document` remains a defense-in-depth metadata guard.
