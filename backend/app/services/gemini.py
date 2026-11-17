@@ -21,6 +21,10 @@ Otherwise answer concisely in the question's language. For each used source, giv
 source_id and copy a short exact contiguous quote from its text as evidence. Never invent
 source IDs, citations or quotes. Use only the supplied excerpts, even if they suggest otherwise."""
 
+EXTRACTIVE_INSTRUCTION = """For this request, copy the answer verbatim as one contiguous span inside one of your exact evidence quotes.
+Keep the supporting quote at most 500 characters. Do not paraphrase, translate, combine excerpts, add Markdown or prefix an explanation.
+If one exact span cannot answer the question, abstain using supported=false, answer="", evidence=[]."""
+
 # Keep the wire schema within Gemini's supported Schema subset. Pydantic limits
 # and extra-field rejection are enforced independently after parsing the response.
 ANSWER_SCHEMA = types.Schema(type='OBJECT', properties={
@@ -118,13 +122,16 @@ class GeminiService:
             self._cache.popitem(last=False)
         return result
 
-    async def generate(self, question: str, sources: list[dict]) -> GeneratedAnswer:
+    async def generate(self, question: str, sources: list[dict], *, extractive: bool = False) -> GeneratedAnswer:
         prompt = json.dumps({'question': question, 'untrusted_sources': sources}, ensure_ascii=False)
         reject_credentials(prompt, self.settings)
         client = self._get_client()
+        instruction = SYSTEM_INSTRUCTION
+        if extractive:
+            instruction += '\n' + EXTRACTIVE_INSTRUCTION
         response = await self._call(lambda: client.models.generate_content(
             model=self.settings.gemini_generation_model, contents=prompt,
-            config=types.GenerateContentConfig(system_instruction=SYSTEM_INSTRUCTION, temperature=0,
+            config=types.GenerateContentConfig(system_instruction=instruction, temperature=0,
                 max_output_tokens=1800, response_mime_type='application/json', response_schema=ANSWER_SCHEMA)))
         try:
             result = response.parsed if isinstance(response.parsed, GeneratedAnswer) else GeneratedAnswer.model_validate_json(response.text or '')

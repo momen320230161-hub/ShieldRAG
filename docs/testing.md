@@ -126,7 +126,7 @@ Local tests require no real credentials or API calls:
 .venv/Scripts/python -m scripts.compare_security
 ```
 
-Training is explicit and writes the trusted local JSON bundle/manifest and public synthetic reports. The committed bundle is sufficient for normal startup and CI; CI does not retrain it. Review changed hashes and metrics after deliberate retraining. Grouped partitions, candidate comparison, validation-only threshold selection, the fixed review band and test limitations are documented in [security-agent.md](security-agent.md). `security_evaluation/classifier-report.json`, `agent-report.json`, `split-manifest.json` and `paired-mocked-report.json` are reproducible public synthetic artifacts, not private fixture manifests. The mocked comparison uses an intentionally vulnerable fake generator and is not a real Gemini attack-success claim.
+Training explicitly writes the trusted local JSON bundle and public synthetic reports. CI loads the committed bundle. Review changed hashes and metrics after retraining. [Security Agent documentation](security-agent.md) explains grouped partitions, validation-only candidate and threshold selection, the reviewed fixed test and availability limits. Current `classifier-report.json`, `agent-report.json`, `split-manifest.json` and `paired-mocked-report.json` are under `security_evaluation/`. The original Task 05 reports are in `security_evaluation/task05-baseline/`. The mock generator intentionally emits synthetic contamination to exercise response screening.
 
 Full real verification uses a fresh guarded fixture directory and an authorized SQL operator. Install `requirements-integration.txt` for fixture password hashing as described above. From `backend/`:
 
@@ -144,7 +144,14 @@ $env:SHIELDRAG_FIXTURE_MANIFEST=(Resolve-Path .integration/task05-run-001/manife
 # Remove the password manifest only after confirmed cleanup.
 ```
 
-`SHIELDRAG_RAG=1` and `SHIELDRAG_SECURITY_LIVE=1` explicitly opt into the small synthetic Gemini cost. Without these flags the corresponding cloud cases skip and must be reported as skipped. Use `tests/test_security_integration.py` for only the nine new live cases. They exercise real audit writes/role denial/replay, five direct denials before embeddings, paired safe public/restricted answers, and a real indirect-source attack. A small sanitized `paired-live-report.json` records statuses, citation presence, role isolation, observed canary outcome and latency; it contains no JWTs, source excerpts or complete model responses. It is a smoke comparison, not an independent benchmark. Existing RAG tests separately check exact source/quote/page validity.
+`SHIELDRAG_RAG=1` and `SHIELDRAG_SECURITY_LIVE=1` explicitly opt into a small synthetic Gemini cost. Without these flags, the corresponding cases skip. `tests/test_security_integration.py` contains nine role-aware Supabase/Gemini tests and one Gemini-only test. The role-aware cases exercise real audit writes/role denial/replay, five direct denials before embeddings, paired safe public/restricted answers, exact quotes and pages from permitted chunks, the secure answer span and a real indirect-source case. A run with these fixtures writes a sanitized `paired-live-report.json` with statuses, citation presence, role isolation, canary outcome and timing.
+
+To run only the real extractive provider check, with one logical Gemini request and no Supabase fixture or writes:
+
+```powershell
+$env:SHIELDRAG_SECURITY_LIVE='1'
+.venv/Scripts/python -m pytest tests/test_security_integration.py -k gemini_extractive_provider_only -q -p no:cacheprovider --tb=short
+```
 
 The new security fixture records an ignored recovery journal, verifies synthetic ownership/allowed event categories, removes its exact new security-event IDs, then delegates object/chunk/document cleanup to the existing guarded RAG fixture. The original account cleanup refuses unexpected references. Preserve journals and manifests on failure. Platform Auth audit retention remains unchanged.
 

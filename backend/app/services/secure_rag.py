@@ -1,6 +1,5 @@
 import logging
 
-import anyio
 from fastapi import HTTPException
 from starlette.concurrency import run_in_threadpool
 
@@ -61,19 +60,25 @@ async def secure_ask(gateway,gemini,agent,audit,principal,question,settings):
                 return await block(result,'context',match.document_id)
             error_reason='provider_unavailable'
             raw=await gemini.generate(question.question,[{'source_id':i,'text':m.content,
-                'document_name':m.document_name} for i,m in enumerate(matches)])
+                'document_name':m.document_name} for i,m in enumerate(matches)],extractive=True)
             if not isinstance(raw,GeneratedAnswer):
                 raise SecurityUnavailable('Unexpected answer schema')
             error_reason='classifier_error'
-            output_text=raw.answer+'\n'+'\n'.join(e.quote for e in raw.evidence)
-            if output_text.strip():
-                output=(await analyze([output_text],'output'))[0]
+            span=raw.answer.strip()
+            if raw.supported and (not span or not valid_evidence(raw,matches)
+                    or not any(span in evidence.quote for evidence in raw.evidence)):
+                return await block(Decision('block','output_policy_violation','invalid_source_support'),'output')
+            # Analyze the answer once. Quotes are checked independently by rules
+            # and must be exact substrings of previously screened source chunks.
+            for evidence in raw.evidence:
+                if violation := inspect_rules(evidence.quote,'output',settings):
+                    return await block(violation,'output')
+            if span:
+                output=(await analyze([span],'output'))[0]
                 if output.decision!='allow':
                     return await block(output,'output')
-            if raw.supported and (not raw.answer.strip() or not valid_evidence(raw,matches)):
-                return await block(Decision('block','output_policy_violation','invalid_source_support'),'output')
             error_reason='provider_unavailable'
-            result=await validate_answer(gateway,principal,matches,raw,settings)
+            result=await validate_answer(gateway,principal,matches,raw.model_copy(update={'answer':span}),settings)
         else:
             result=None
         # Require an audit acknowledgement before releasing any secure response.

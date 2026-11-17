@@ -11,6 +11,8 @@ import sklearn
 from app.security.features import FEATURES, vectorizer
 
 VERSION='shield-security-v1'
+# The deployed audit RPC accepts VERSION as its schema/policy identifier.
+MODEL_REVISION='shield-security-calibration-1'
 BUNDLE_DIR=Path(__file__).resolve().parent/'artifacts'
 
 
@@ -30,6 +32,7 @@ class Classifier:
             data=model_path.read_bytes()
             manifest=json.loads(manifest_path.read_bytes())
             if (hashlib.sha256(data).hexdigest()!=manifest['sha256'] or manifest['version']!=VERSION
+                    or manifest['model_revision']!=MODEL_REVISION
                     or manifest['sklearn_version']!=sklearn.__version__):
                 raise ValueError('Artifact identity')
             model=json.loads(data)

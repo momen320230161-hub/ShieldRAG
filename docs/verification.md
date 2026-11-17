@@ -1,4 +1,29 @@
-# Task 05 verification - completion 2026-11-17
+# Task 05.1 verification — 2026-11-17
+
+The fixed, previously inspected 48-row synthetic test retained its exact rows, labels and family assignments. The full policy reduced benign non-allow from **7/24 to 4/24** while detecting **24/24** attacks on those rows in both versions. Classifier-only recall fell from **21/24 to 19/24**. The selected Linear SVM retained **21/21** validation attack non-allows with **6/42** benign non-allows, versus **13/42** with the original policy on the same expanded validation data. See [policy, calibration, and limitations](security-agent.md).
+
+The original controlled `output_contamination` case generated once and was blocked at output for `invalid_source_support`: a valid quote did not contain the proposed answer. Secure mock attack success fell from **1/5 to 0/5**, and benign supported answers rose from **1/3 to 2/3**. Baseline stayed at **4/5** and **3/3**, respectively. The Arabic mock benign case still received context review. The secure pipeline verified exact answer spans, citations and current source access. The invariant does not establish semantic entailment. These are development comparisons, with no independent benchmark.
+
+The final local run passed **277 tests** with **43 integration cases deselected**. The separately executed live subset is recorded below. The run includes the exact-output invariant, original controlled failure, valid-quote laundering, benign multilingual and security education, unchanged caller-JWT access, fail-closed provider/model/audit handling and concurrent request coverage. `pip check` reported no broken requirements.
+
+## Checks against real services
+
+- **4 passed** in the selected live HTTP run. One was a real Gemini extractive-generation test using one synthetic question/source and checking the returned answer span and quote. Three were real Supabase Auth/PostgREST checks covering health, rejection of a forged JWT and anonymous table access denial.
+- The remaining **39** collected integration cases were not run for Task 05.1, including the **nine** Student/Admin and paired role-aware security cases. Automatic approval review rejected the fixture setup because its transaction commits temporary Auth and database rows before HTTP tests and guarded cleanup. An independent read-only query using the exact synthetic fixture account IDs found zero users, profiles, documents, chunks, security events and Storage objects. The Task 05 live role/citation results below apply to the previous implementation.
+- **6 SQL rollback suites passed** against the already migrated project: RLS, ingestion, integrity audit, RAG, cached index and security agent. The security suite covers audit RPC permissions and UUID replay. Security Advisor returned **zero findings** for this check.
+- No migration was added, edited or replayed. The deployed audit policy identifier, service-only write permission and caller-JWT retrieval are preserved.
+
+## Reproduction
+
+See [testing commands](testing.md) for local tests, report generation, the Gemini-only check and the guarded role-aware Supabase setup/cleanup. To reproduce the four non-fixture HTTP checks from `backend/`:
+
+```powershell
+$env:SHIELDRAG_INTEGRATION='1'
+$env:SHIELDRAG_SECURITY_LIVE='1'
+.venv/Scripts/python -m pytest tests/test_security_integration.py tests/test_integration.py -k 'gemini_extractive_provider_only or auth_rejects_forged_jwt or postgrest_rejects_anonymous_table_access or auth_health' -q -p no:cacheprovider --tb=short
+```
+
+## Historical Task 05 verification — 2026-11-17
 
 ## Executed checks
 
@@ -7,7 +32,7 @@
 - Existing Auth, trusted Student/Admin roles, private ingestion/review, original/index SHA verification, atomic publication, RLS, cached-index protection, real Gemini embedding/generation and page citations remain passing. Secure and baseline share caller-token search and source/citation revalidation; no service-role retrieval was introduced.
 - New local checks cover benign English/Arabic security questions, direct/indirect/encoded/Unicode attacks, output credentials and operational-prompt fragments, group isolation, model provenance, no request-time fitting, missing/corrupt bundles, runtime failure, review/deny-before-embedding, unsafe-context-before-generation, fabricated evidence, malformed/provider output, audit failure, role spoofing/revocation and body limits. An unavailable audit withholds even an otherwise safe answer.
 - New real cloud cases verified five input denials without an embedding call, genuine persisted audits, forged-token rejection, Student/Admin denial of direct audit-RPC invocation, UUID replay with one row, paired public answers for both roles, Admin restricted answers and Student restricted-target exclusion. Existing cloud tests additionally verify pending/rejected/processing/failed isolation.
-- The real indirect-source canary did not appear in either pipeline's returned answer. Baseline made one logical generation call; secure blocked the unsafe source before generation and made zero. This is a single smoke case, not a demonstrated real-world attack-success-rate improvement. Real paired statuses and timings are recorded without raw responses in `backend/security_evaluation/paired-live-report.json`.
+- The real indirect-source canary did not appear in either pipeline's returned answer. Baseline made one logical generation call; secure blocked the unsafe source before generation and made zero. This is a single smoke case, not a demonstrated real-world attack-success-rate improvement. Historical paired statuses and timings are recorded without raw responses in `backend/security_evaluation/task05-baseline/paired-live-report.json`.
 - All **six** real SQL rollback suites passed: RLS, ingestion, integrity audit, atomic RAG, cached indexing and new security-agent auditing. The new suite verified narrow grants, registered actor/current visible-document association, fixed reasons/policy version, idempotent UUIDs, conflicting replay rejection and user-write denial. All synthetic rows rolled back.
 - New forward migration **`20261115202657_shieldrag_security_agent_audit`** adds one SECURITY INVOKER RPC with empty fixed search_path, service_role-only EXECUTE and no RLS/table changes. Direct inspection confirmed anon/authenticated cannot execute it. Existing applied migrations were not edited or replayed. Deployed/local normalized SQL digest matched: `063a84b8223c664fa9066ad2a44bdab4`. The existing unavailable-Windows-CLI fallback used the connected migration tool and retained its server-generated version.
 - After fixture teardown, independent SQL confirmed **0 uploaded synthetic documents, 0 Storage objects and 0 security events** for the run. Guarded account/document/chunk cleanup returned **remaining_fixture_rows = 0**. Security/RAG/ingestion journals were removed only after successful scoped teardown; the private password manifest was removed after independent cleanup confirmation. Auth-managed audit retention was unchanged.

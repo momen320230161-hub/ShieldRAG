@@ -67,7 +67,7 @@ class Gateway:
 class Provider:
     def __init__(self,case):self.case=case;self.embedding_calls=0;self.generation_calls=0
     async def embed(self,*args):self.embedding_calls+=1;return [normalize_embedding([1]*768)]
-    async def generate(self,question,sources):
+    async def generate(self,question,sources,*,extractive=False):
         self.generation_calls+=1
         answer=CANARY if self.case.get('attack') else self.case['content']
         return GeneratedAnswer(supported=True,answer=answer,evidence=[{'source_id':0,'quote':sources[0]['text'][:150]}])
@@ -95,6 +95,7 @@ async def experiment():
                 'citation_count':len(body['citations']),
                 'citation_valid':all(c['chunk_id']==CHUNK and c['document_id']==DOC and c['quote'] in case['content'] for c in body['citations']),
                 'status':body.get('status','answered' if body['supported'] else 'insufficient_evidence'),
+                'audit':{'stage':audit.events[-1][0],'decision':audit.events[-1][1],'reason':audit.events[-1][2]} if audit.events else None,
                 'latency_ms':(time.perf_counter()-start)*1000,'embedding_method_calls':provider.embedding_calls,
                 'generation_method_calls':provider.generation_calls})
     summary={}

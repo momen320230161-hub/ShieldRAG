@@ -15,9 +15,11 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix, f1_score, precision_score, recall_score
 from sklearn.svm import LinearSVC
 
-from app.security.classifier import BUNDLE_DIR, VERSION, Classifier
-from app.security.dataset import SEED, records, split_records
+from app.core.config import Settings
+from app.security.classifier import BUNDLE_DIR, MODEL_REVISION, VERSION, Classifier
+from app.security.dataset import SEED, records, split_records, stage_of
 from app.security.features import FEATURES, vectorizer
+from app.security.rules import inspect_rules
 
 
 def metrics(y,p):
@@ -28,11 +30,17 @@ def metrics(y,p):
         'false_positive_rate':float(fp/max(tn+fp,1)),'false_negative_rate':float(fn/max(tp+fn,1))}
 
 
-def choose_threshold(y,margins):
+def choose_thresholds(y,margins,rule_blocks):
+    """Require the original policy's validation recall (all 21 attacks)."""
     values=sorted(set([0.0,*map(float,margins)]))
-    candidates=values+[(a+b)/2 for a,b in zip(values,values[1:])]
-    results=[(threshold,metrics(y,margins>=threshold)) for threshold in candidates]
-    return max(results,key=lambda r:(r[1]['macro_f1'],-r[1]['false_positive_rate'],r[1]['recall'],-abs(r[0])))
+    candidates=[values[0]-1,*[(a+b)/2 for a,b in zip(values,values[1:])],values[-1]+1,0.0]
+    results=[(threshold,metrics(y,rule_blocks | (margins>=threshold))) for threshold in candidates]
+    review,non_allow=max((item for item in results if item[1]['recall']==1.0),
+        key=lambda item:(-item[1]['false_positive_rate'],item[0]))
+    threshold,block=max((item for item in results if item[0]>review),
+        key=lambda item:(item[1]['macro_f1'],-item[1]['false_positive_rate'],item[1]['recall'],-abs(item[0])))
+    return {'threshold':threshold,'review_threshold':review,'validation':block,'validation_non_allow':non_allow,
+            'validation_classifier':metrics(y,margins>=threshold)}
 
 
 def main():
@@ -45,17 +53,19 @@ def main():
     y={part:np.array([r['label'] for r in data]) for part,data in splits.items()}
     candidates={'logistic_regression':LogisticRegression(C=1,class_weight='balanced',solver='liblinear',random_state=SEED,max_iter=2000),
                 'linear_svc':LinearSVC(C=.5,class_weight='balanced',random_state=SEED,max_iter=5000)}
+    settings=Settings(_env_file=None,supabase_url='https://example.supabase.co',
+                      supabase_publishable_key='sb_publishable_synthetic')
+    rule_blocks=np.array([inspect_rules(row['text'],stage_of(row),settings) is not None
+                          for row in splits['validation']])
     measured={}
     for name,model in candidates.items():
         model.fit(X['train'],y['train'])
-        threshold,score=choose_threshold(y['validation'],model.decision_function(X['validation']))
-        measured[name]={'threshold':threshold,'validation':score}
-    selected=max(measured,key=lambda name:(measured[name]['validation']['macro_f1'],
+        measured[name]=choose_thresholds(y['validation'],model.decision_function(X['validation']),rule_blocks)
+    selected=max(measured,key=lambda name:(-measured[name]['validation_non_allow']['false_positive_rate'],
+        measured[name]['validation']['macro_f1'],
         -measured[name]['validation']['false_positive_rate'],measured[name]['validation']['recall']))
     model=candidates[selected]; threshold=measured[selected]['threshold']
-    # A fixed 0.25-margin review band is declared before final test evaluation.
-    # Review never proceeds to generation; scores are uncalibrated margins.
-    artifact={'candidate':selected,'threshold':threshold,'review_threshold':threshold-.25,
+    artifact={'candidate':selected,'threshold':threshold,'review_threshold':measured[selected]['review_threshold'],
         'weights':model.coef_[0].tolist(),'intercept':float(model.intercept_[0]),'features':[]}
     for transform,(analyzer,_,_) in zip(transforms,FEATURES):
         artifact['features'].append({'analyzer':analyzer,'vocabulary':transform.get_feature_names_out().tolist(),
@@ -64,7 +74,7 @@ def main():
     dataset_raw=json.dumps(rows,ensure_ascii=False,sort_keys=True).encode()
     BUNDLE_DIR.mkdir(parents=True,exist_ok=True)
     (BUNDLE_DIR/'classifier.json').write_bytes(raw)
-    manifest={'version':VERSION,'sha256':hashlib.sha256(raw).hexdigest(),'seed':SEED,
+    manifest={'version':VERSION,'model_revision':MODEL_REVISION,'sha256':hashlib.sha256(raw).hexdigest(),'seed':SEED,
         'dataset_sha256':hashlib.sha256(dataset_raw).hexdigest(),'sklearn_version':sklearn.__version__,
         'source':'project-authored synthetic families; no external benchmark or private content'}
     (BUNDLE_DIR/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
@@ -77,7 +87,10 @@ def main():
         np.testing.assert_allclose(reconstructed,model.decision_function(X[part]),rtol=1e-10,atol=1e-10)
     margins=model.decision_function(X['test']); predicted=margins>=threshold
     review=margins>=artifact['review_threshold']
-    report={'version':VERSION,'seed':SEED,'synthetic_only':True,'external_benchmark':None,
+    report={'version':VERSION,'model_revision':MODEL_REVISION,'seed':SEED,'synthetic_only':True,'external_benchmark':None,
+        'selection_scope':'Validation only; preserve 21/21 rule-or-margin attack recall, then maximize benign availability and rank block macro F1',
+        'frozen_test_sha256':hashlib.sha256(
+            json.dumps(splits['test'],ensure_ascii=False,sort_keys=True).encode()).hexdigest(),
         'splits':{part:{'groups':sorted({r['group'] for r in data}),'benign':sum(r['label']==0 for r in data),
             'malicious':sum(r['label']==1 for r in data),'ids':[r['id'] for r in data]} for part,data in splits.items()},
         'candidates':measured,'selected':selected,'threshold':threshold,'review_threshold':artifact['review_threshold'],
@@ -99,7 +112,7 @@ def main():
     out.mkdir(exist_ok=True)
     (out/'classifier-report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     (out/'split-manifest.json').write_text(json.dumps({part:[r['id'] for r in data] for part,data in splits.items()},indent=2)+'\n',encoding='utf-8')
-    print(json.dumps({'selected':selected,'validation':measured[selected]['validation'],'test':report['test_classifier'],
+    print(json.dumps({'selected':selected,'validation':measured[selected],'test':report['test_classifier'],
         'test_examples':len(splits['test']),'artifact_bytes':len(raw)}))
 
 

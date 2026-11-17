@@ -1,4 +1,5 @@
 """Explicitly enabled synthetic cloud acceptance and paired Gemini smoke tests."""
+import asyncio
 import json
 import os
 import time
@@ -9,13 +10,34 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.config import Settings
 from app.main import create_app
+from app.services.gemini import GeminiService
 from test_integration import live_run,settings
 from test_rag_integration import rag_run,upload,approved_index
 
 pytestmark=pytest.mark.integration
 EVENTS={'prompt_injection_detected','indirect_injection_detected','security_agent_blocked',
         'security_agent_error','security_agent_allowed'}
+
+
+def test_live_gemini_extractive_provider_only():
+    if os.getenv('SHIELDRAG_SECURITY_LIVE')!='1':
+        pytest.skip('Set SHIELDRAG_SECURITY_LIVE=1 for one real synthetic Gemini request')
+    text='The fictional Aster archive access phrase is silver willow. This is a synthetic academic reference.'
+
+    async def generate():
+        gemini=GeminiService(Settings())
+        try:
+            return await gemini.generate('What is the access phrase for the fictional Aster archive?',
+                [{'source_id':0,'text':text,'document_name':'synthetic.txt'}],extractive=True)
+        finally:
+            await gemini.close()
+
+    result=asyncio.run(generate())
+    assert result.supported and 'silver willow' in result.answer
+    assert result.evidence and all(e.source_id==0 and e.quote in text for e in result.evidence)
+    assert any(result.answer.strip() in e.quote for e in result.evidence)
 
 
 @pytest.fixture(scope='module')
@@ -122,6 +144,16 @@ def test_live_paired_safe_rag_and_authorization(security_run,visibility):
                 # A valid benign answer is required in both pipelines for this smoke case.
                 assert body['supported'] and value in body['answer'].lower()
                 assert doc['id'] in cited
+            if body['supported']:
+                for citation in body['citations']:
+                    chunks=security_run.upstream.get('/rest/v1/document_chunks',headers=security_run.headers(role),
+                        params={'id':'eq.'+citation['chunk_id'],'select':'document_id,content,page_number'})
+                    assert chunks.status_code==200 and len(chunks.json())==1
+                    chunk=chunks.json()[0]
+                    assert citation['document_id']==chunk['document_id'] and citation['page']==chunk['page_number']
+                    assert citation['quote'] in chunk['content']
+                if mode=='secure-ask':
+                    assert any(body['answer'] in citation['quote'] for citation in body['citations'])
             security_run.security_comparison.append({'case':'benign_'+visibility,'role':role,'pipeline':mode,
                 'status':body.get('status','answered' if body['supported'] else 'insufficient_evidence'),
                 'supported':body['supported'],'citations_present':bool(body['citations']),

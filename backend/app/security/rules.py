@@ -8,7 +8,7 @@ from fastapi import HTTPException
 
 from app.security.decisions import Decision
 from app.security.features import normalize
-from app.services.gemini import SYSTEM_INSTRUCTION, reject_credentials
+from app.services.gemini import EXTRACTIVE_INSTRUCTION, SYSTEM_INSTRUCTION, reject_credentials
 
 
 PATTERNS=(
@@ -24,6 +24,12 @@ PATTERNS=(
  ('instruction_override',r'(?:عطل|عطّل|تجاوز).{0,35}(?:وكيل الحماية|فحوصات الامان|فحوصات الأمان|فحص الصلاحيات|قيود الامان)'),
 )
 
+OUTPUT_ADOPTION = re.compile(
+    r"(?:^|[.!?:]\s*)i\s+(?:will|have)\s+(?:now\s+)?"
+    r"(?:ignore|ignored|disregard|disregarded|override|overridden)\s+"
+    r"(?:all\s+)?(?:the\s+)?(?:previous|prior|system)\s+(?:instructions|rules|messages)"
+)
+
 
 def inspect_rules(text,stage,settings):
     # Preserve exact configured-key checks, including nonstandard test credentials.
@@ -35,9 +41,12 @@ def inspect_rules(text,stage,settings):
     normalized=normalize(text)
     if stage=='output':
         # Detect substantial verbatim operational prompt fragments, without returning them.
-        sentences=[normalize(s) for s in SYSTEM_INSTRUCTION.splitlines() if len(s.strip())>45]
+        prompt = SYSTEM_INSTRUCTION + '\n' + EXTRACTIVE_INSTRUCTION
+        sentences=[normalize(s) for s in prompt.splitlines() if len(s.strip())>45]
         if any(s in normalized for s in sentences):
             return Decision('block','output_policy_violation','prompt_extraction')
+        if OUTPUT_ADOPTION.search(normalized):
+            return Decision('block','output_policy_violation','instruction_override')
     for reason,pattern in PATTERNS:
         if re.search(pattern,normalized):
             category='indirect_prompt_injection' if stage=='context' else (
@@ -59,6 +68,10 @@ def inspect_rules(text,stage,settings):
             reject_credentials(value,settings)
         except HTTPException:
             return Decision('block','credential_disclosure','protected_credential')
-        if any(re.search(pattern,normalize(value)) for _,pattern in PATTERNS):
-            return Decision('block','indirect_prompt_injection' if stage=='context' else 'direct_prompt_injection','encoded_instruction')
+        decoded_text = normalize(value)
+        if (any(re.search(pattern,decoded_text) for _,pattern in PATTERNS)
+                or (stage=='output' and OUTPUT_ADOPTION.search(decoded_text))):
+            category = {'input':'direct_prompt_injection','context':'indirect_prompt_injection',
+                        'output':'output_policy_violation'}[stage]
+            return Decision('block',category,'encoded_instruction')
     return None
