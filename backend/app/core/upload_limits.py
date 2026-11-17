@@ -19,7 +19,7 @@ class UploadBodyLimit:
             return await self.app(scope, receive, send)
         is_upload = scope['path'] == '/api/v1/documents'
         is_review = (scope['path'].startswith('/api/v1/documents/') and scope['path'].endswith(('/approve', '/reject', '/index'))
-                     or scope['path'] in ('/api/v1/rag/search', '/api/v1/rag/ask'))
+                     or scope['path'] in ('/api/v1/rag/search', '/api/v1/rag/ask','/api/v1/rag/secure-ask'))
         if not is_upload and not is_review:
             return await self.app(scope, receive, send)
         limit = MAX_UPLOAD_BODY if is_upload else MAX_REVIEW_BODY

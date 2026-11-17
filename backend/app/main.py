@@ -14,6 +14,8 @@ from app.db.document_store import DocumentStore
 from app.routers import auth, documents, security, rag
 from app.db.rag_store import RagStore
 from app.services.gemini import GeminiService
+from app.security.agent import SecurityAgent
+from app.db.security_store import SecurityStore
 
 
 def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
@@ -27,6 +29,8 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
             app.state.rag_store = RagStore(app.state.document_store)
             app.state.settings = config
             app.state.gemini = GeminiService(config)
+            app.state.security_agent=SecurityAgent(config)
+            app.state.security_store=SecurityStore(app.state.document_store)
             try:
                 yield
             finally:

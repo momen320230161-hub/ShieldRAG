@@ -114,3 +114,45 @@ The six targeted live cases use real Supabase Auth, PostgREST, Storage, RLS and 
 The final live case indexes a synthetic eight-page PDF with identical text on pages 2/8 using genuine normalized embeddings, verifies both page-specific search results, and checks real Gemini-generated citations for each. To make citation selection deterministic between equal excerpts, its transport selects a single page from actual caller-JWT-authorized RPC rows. It does not fabricate a database result or bypass RLS; the selection is controlled test instrumentation. Normal production retrieval remains unchanged. Identical source text shares an embedding request while retaining distinct chunk rows and page provenance.
 
 The configuration hash is version 2, so pre-hardening indexes need a separately authorized rebuild to recover previously omitted occurrences. Tests use newly indexed synthetic documents. No production-like data is rebuilt or repaired by this test workflow.
+
+## Task 05 Security Agent and comparisons
+
+Local tests require no real credentials or API calls:
+
+```powershell
+.venv/Scripts/python -m pytest tests/test_security_agent.py -q -p no:cacheprovider
+.venv/Scripts/python -m scripts.train_security
+.venv/Scripts/python -m scripts.evaluate_security
+.venv/Scripts/python -m scripts.compare_security
+```
+
+Training explicitly writes the trusted local JSON bundle and public synthetic reports. CI loads the committed bundle. Review changed hashes and metrics after retraining. [Security Agent documentation](security-agent.md) explains grouped partitions, validation-only candidate and threshold selection, the reviewed fixed test and availability limits. Current `classifier-report.json`, `agent-report.json`, `split-manifest.json` and `paired-mocked-report.json` are under `security_evaluation/`. The original Task 05 reports are in `security_evaluation/task05-baseline/`. The mock generator intentionally emits synthetic contamination to exercise response screening.
+
+Full real verification uses a fresh guarded fixture directory and an authorized SQL operator. Install `requirements-integration.txt` for fixture password hashing as described above. From `backend/`:
+
+```powershell
+.venv/Scripts/python -m scripts.integration_fixtures --directory .integration/task05-run-001
+# Authorized SQL operator applies this directory's setup.sql.
+$env:SHIELDRAG_INTEGRATION='1'
+$env:SHIELDRAG_LIVE_FIXTURES='1'
+$env:SHIELDRAG_INGESTION='1'
+$env:SHIELDRAG_RAG='1'
+$env:SHIELDRAG_SECURITY_LIVE='1'
+$env:SHIELDRAG_FIXTURE_MANIFEST=(Resolve-Path .integration/task05-run-001/manifest.json).Path
+.venv/Scripts/python -m pytest -q -p no:cacheprovider --tb=short
+# ALWAYS run the matching cleanup.sql after fixture teardown; verify zero remains.
+# Remove the password manifest only after confirmed cleanup.
+```
+
+`SHIELDRAG_RAG=1` and `SHIELDRAG_SECURITY_LIVE=1` explicitly opt into a small synthetic Gemini cost. Without these flags, the corresponding cases skip. `tests/test_security_integration.py` contains nine role-aware Supabase/Gemini tests and one Gemini-only test. The role-aware cases exercise real audit writes/role denial/replay, five direct denials before embeddings, paired safe public/restricted answers, exact quotes and pages from permitted chunks, the secure answer span and a real indirect-source case. A run with these fixtures writes a sanitized `paired-live-report.json` with statuses, citation presence, role isolation, canary outcome and timing.
+
+To run only the real extractive provider check, with one logical Gemini request and no Supabase fixture or writes:
+
+```powershell
+$env:SHIELDRAG_SECURITY_LIVE='1'
+.venv/Scripts/python -m pytest tests/test_security_integration.py -k gemini_extractive_provider_only -q -p no:cacheprovider --tb=short
+```
+
+The new security fixture records an ignored recovery journal, verifies synthetic ownership/allowed event categories, removes its exact new security-event IDs, then delegates object/chunk/document cleanup to the existing guarded RAG fixture. The original account cleanup refuses unexpected references. Preserve journals and manifests on failure. Platform Auth audit retention remains unchanged.
+
+Run `tests/security_agent_rollback.sql` through the authorized operator in addition to the five existing rollback suites. It checks service-only EXECUTE, trusted actor/visible-document association, stable bounded reasons, event UUID deduplication, conflict rejection and unchanged user-write restrictions. Every row rolls back. No existing migration should be replayed against this project.
