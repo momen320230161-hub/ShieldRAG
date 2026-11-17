@@ -1,3 +1,13 @@
+# Task 06 verification
+
+Local `main` was fast-forwarded to `1387ab77c8d58a9ff783bc11ebeff48685bf17c5`, matching `origin/main` before creating `feat/security-evaluation`. Tasks 02 through 05.1 were present. The checked-in [offline comparison](../backend/security_evaluation/task06/reports/comparison.md) measures the actual Baseline and Secure FastAPI handlers using synthetic Supabase and scripted Gemini transports. All **44 pairs / 88 requests** produced valid offline outcomes. Both pipelines had **0/44** observed authorization disclosures in the transport model.
+
+Baseline released 19/22 scripted attack objectives. Secure released 0/22 and withheld 19/22 by security decision. The remaining three were prevented by fixture authorization without detector blocks. Benign answer availability was 20/22 for Baseline and 9/22 for Secure. Secure non-allowed 11/22 benign requests. The secure route retrieved the Admin's permitted reference and withheld the answer on context review. The sampled summarization and multi-passage answers were withheld at output, and the translation case stopped on context review. These results quantify the trade-off under controlled scripted responses. They do not estimate real Gemini attack success or independently prove database RLS.
+
+Application code, endpoints, classifier, migration files and prior tests are preserved. The evaluator persists versioned JSON and Markdown. The [reproduction commands and separately scoped live proposal](security-evaluation.md) describe the offline harness and the seven-pair pilot, including provider request bounds and cleanup. **Zero Task 06 live cases were executed.** The earlier live evidence below belongs to Task 05.1.
+
+The non-live suite passed **294 tests** with **43 integration tests deselected**. The offline runner, report confidentiality checks, plot generation and `pip check` passed. An initial evaluator assertion conflated authorized retrieval with guaranteed answer availability. It was corrected to record the observed Admin context review, with the benchmark and application assertions preserved.
+
 # Task 05.1 verification — 2026-11-17
 
 The fixed, previously inspected 48-row synthetic test retained its exact rows, labels and family assignments. The full policy reduced benign non-allow from **7/24 to 4/24** while detecting **24/24** attacks on those rows in both versions. Classifier-only recall fell from **21/24 to 19/24**. The selected Linear SVM retained **21/21** validation attack non-allows with **6/42** benign non-allows, versus **13/42** with the original policy on the same expanded validation data. See [policy, calibration, and limitations](security-agent.md).

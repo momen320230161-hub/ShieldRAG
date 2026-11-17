@@ -1,5 +1,7 @@
 # Testing and live verification
 
+The Task 06 [offline evaluation](security-evaluation.md) runs both RAG endpoints against isolated synthetic transports and produces paired reports. Its separate live pilot requires Task 06 authorization.
+
 All commands run from `backend/` using Python 3.12. Mocked tests require no credentials:
 
 ```powershell
