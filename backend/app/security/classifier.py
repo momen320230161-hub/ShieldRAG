@@ -12,8 +12,21 @@ from app.security.features import FEATURES, vectorizer
 
 VERSION='shield-security-v1'
 # The deployed audit RPC accepts VERSION as its schema/policy identifier.
-MODEL_REVISION='shield-security-calibration-2'
-BUNDLE_DIR=Path(__file__).resolve().parent/'artifacts'
+MODEL_REVISION='shield-security-calibration-1'
+ARTIFACTS = Path(__file__).resolve().parent / 'artifacts'
+REVISIONS = {
+    'shield-security-calibration-1': ARTIFACTS / 'calibration-1',
+    'shield-security-calibration-2': ARTIFACTS,
+    'shield-security-calibration-3': ARTIFACTS / 'calibration-3',
+}
+BUNDLE_DIR = REVISIONS[MODEL_REVISION]
+# Shipped bundles are immutable. A manifest and model copied together from
+# another experiment cannot select a different set of numerical parameters.
+BUNDLE_DIGESTS = {
+    'shield-security-calibration-1': '92021975d6b1f5e6bc5f1fed836b502e2485126308b1c8dbc61c858f20306d85',
+    'shield-security-calibration-2': '3d3434cf75f010f573de697745a0161e90bade63e62740c63a27381e07b137fd',
+    'shield-security-calibration-3': '1f9f49cf028894dc10106b9707b8afe82deeb3bd98d5eea3cb6b21efb5cacaff',
+}
 
 
 class SecurityUnavailable(Exception):
@@ -21,10 +34,15 @@ class SecurityUnavailable(Exception):
 
 
 class Classifier:
-    def __init__(self):
+    def __init__(self, *, revision=None, directory=None):
         try:
-            model_path=BUNDLE_DIR/'classifier.json'
-            manifest_path=BUNDLE_DIR/'manifest.json'
+            expected = MODEL_REVISION if revision is None else revision
+            if expected not in REVISIONS:
+                raise ValueError('Unknown model revision')
+            shipped = directory is None
+            directory = directory or (BUNDLE_DIR if revision is None else REVISIONS[expected])
+            model_path=directory/'classifier.json'
+            manifest_path=directory/'manifest.json'
             if model_path.is_symlink() or manifest_path.is_symlink():
                 raise ValueError('Artifact symlink')
             if model_path.stat().st_size>4_000_000 or manifest_path.stat().st_size>8192:
@@ -32,15 +50,19 @@ class Classifier:
             data=model_path.read_bytes()
             manifest=json.loads(manifest_path.read_bytes())
             if (hashlib.sha256(data).hexdigest()!=manifest['sha256'] or manifest['version']!=VERSION
-                    or manifest['model_revision']!=MODEL_REVISION
+                    or (shipped and manifest['sha256'] != BUNDLE_DIGESTS[expected])
+                    or manifest['model_revision']!=expected
                     or manifest['sklearn_version']!=sklearn.__version__):
                 raise ValueError('Artifact identity')
             model=json.loads(data)
             self.version=VERSION
             self.threshold=float(model['threshold'])
             self.review_threshold=float(model['review_threshold'])
-            stages=model['stage_thresholds']
-            if not isinstance(stages,dict) or set(stages)!= {'input','context'}:
+            self.revision = expected
+            self.digest = manifest['sha256']
+            stages=model.get('stage_thresholds', {})
+            expected_stages = {'input','context'} if expected == 'shield-security-calibration-2' else set()
+            if not isinstance(stages,dict) or set(stages)!=expected_stages:
                 raise ValueError('Stage policy schema')
             self.stage_thresholds={stage: (float(cuts['threshold']),float(cuts['review_threshold']))
                 for stage,cuts in stages.items()}

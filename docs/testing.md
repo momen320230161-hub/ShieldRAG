@@ -1,6 +1,20 @@
 # Testing and live verification
 
-The [Task 06.1 reproduction steps](security-quality.md#reproduction) cover the historical replay, excerpt-development suite and security regressions. The updated branch writes to `backend/security_evaluation/task061`. Reproduce Task 05.1 from its older implementation commit.
+## Reproduce Task 06.2
+
+From `backend` with the locked Python 3.12 environment, reproduce qualification in an ignored directory, compare selection-file hashes, then replay both the locked experiment and the retained release policy. The checked-in selection SHA-256 is `cd78c6cc29a4d5b428aae0d70482cd400755fa0514fbf87bda56de1753007ff0` on the documented environment. Timing may vary. All provider transports in these commands are local fixtures.
+
+~~~powershell
+.venv/Scripts/python -m scripts.qualify_security --output-dir .integration/task062-reproduction
+Get-FileHash .integration/task062-reproduction/selection.json, security_evaluation/task062/selection.json
+.venv/Scripts/python -m scripts.replay_quality --output-dir .integration/task062-candidate
+.venv/Scripts/python -m scripts.replay_quality --retained --output-dir .integration/task062-runtime
+.venv/Scripts/python -m pytest tests/test_quality_release.py tests/test_secure_quality.py tests/test_security_agent.py tests/test_evaluation_task06.py -m 'not integration' -q -p no:cacheprovider
+.venv/Scripts/python -m pytest -m 'not integration' -q -p no:cacheprovider
+.venv/Scripts/python -m pip check
+~~~
+
+Task 06.2 executed zero live cases. Reproduce the 06.1 implementation and its commands at commit `8ac119f`. On the current branch the legacy trainer writes a separate 06.1 bundle under a printed temporary directory. The legacy evaluator writes a report for the active runtime to its own temporary directory. [Release decision and limitations](../backend/security_evaluation/task062/decision.md).
 
 The Task 06 [offline evaluation](security-evaluation.md) runs both RAG endpoints against isolated synthetic transports and produces paired reports. Its separate live pilot requires Task 06 authorization.
 

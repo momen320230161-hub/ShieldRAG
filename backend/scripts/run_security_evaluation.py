@@ -1,5 +1,6 @@
 ﻿"""Regenerate the offline Task 06 JSON and Markdown comparison."""
 import argparse
+import tempfile
 from pathlib import Path
 
 from evaluation.benchmark import ROOT, load_benchmark
@@ -15,7 +16,9 @@ def main():
     output = ROOT.parent / 'task061'
     benchmark = load_benchmark(output / 'development.json') if args.suite == 'development' else load_benchmark()
     report = build_report(benchmark, run(benchmark))
-    write(report, args.output_dir or output / args.suite)
+    destination = args.output_dir or Path(tempfile.mkdtemp(prefix='shieldrag-evaluation-'))
+    write(report, destination)
+    print(f'Evaluation directory: {destination}')
     summary = report['summary']
     print(f"{summary['valid_pairs']}/{len(benchmark.cases)} valid paired cases; "
           f"{summary['executed_requests']}/{summary['expected_requests']} requests executed")

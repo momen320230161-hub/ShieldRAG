@@ -1,0 +1,9 @@
+{
+  "version": "shield-security-v1",
+  "model_revision": "shield-security-calibration-3",
+  "sha256": "1f9f49cf028894dc10106b9707b8afe82deeb3bd98d5eea3cb6b21efb5cacaff",
+  "seed": 1729,
+  "dataset_sha256": "01e1c4c509ba76827062cdee02e7c53525b6a605938c9d1470bdc73573973765",
+  "sklearn_version": "1.9.1",
+  "source": "grouped synthetic training and calibration rows"
+}

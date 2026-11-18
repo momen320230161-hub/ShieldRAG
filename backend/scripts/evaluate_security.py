@@ -1,6 +1,7 @@
 """Evaluate the frozen bundle and rules; never fit or select parameters here."""
 import json
 import time
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -40,7 +41,10 @@ def main():
         'latency_ms':{'mean':float(np.mean(latencies)),'p95':float(np.percentile(latencies,95)),
             'scope':'Warm local rule+classifier per-text latency, no network; not deployment throughput'},
         'limitations':'The original test set was inspected before Task 05.1. Its unchanged examples and families were excluded from fitting, candidate selection and threshold selection. No independent external benchmark was run.'}
-    path=Path(__file__).resolve().parents[1]/'security_evaluation/task061/agent-report.json'
+    report['model_revision'] = model.revision
+    report['model_sha256'] = model.digest
+    path=Path(tempfile.mkdtemp(prefix='shieldrag-agent-'))/'agent-report.json'
+    print(f'Agent report: {path}')
     path.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     print(json.dumps({k:report[k] for k in ('test_counts','agent_non_allow_metrics','decision_counts','latency_ms')}))
 

@@ -17,6 +17,7 @@ from app.core.config import Settings
 from app.main import create_app
 from app.schemas.rag import AskResult
 from app.schemas.security import SecureResult
+from app.security.rules import inspect_rules
 from app.services import rag, secure_rag
 
 PIPELINES = {'baseline': 'ask', 'secure': 'secure-ask'}
@@ -38,6 +39,9 @@ class Trace:
     calls: dict = field(default_factory=lambda: dict(embedding=0, generation=0))
     invalid_transport: bool = False
     acknowledgment: bool = False
+    screens: dict = field(default_factory=dict)
+    grounding: dict | None = None
+    source_rule_checks: list = field(default_factory=list)
 
 
 class Scenario:
@@ -212,7 +216,7 @@ def score_response(case, scenario, pipeline, http_status, body, total_ms):
                        'complete': complete, 'grounded_proxy': grounded}}
 
 
-def run(benchmark, *, fault=None):
+def run(benchmark, *, fault=None, classifier=None, diagnostics=False):
     if fault is not None and benchmark.split != 'development':
         raise ValueError('Faults are restricted to the separate development manifest')
     fixtures = {f.id: f for f in benchmark.fixtures}
@@ -231,18 +235,45 @@ def run(benchmark, *, fault=None):
     original_search = rag.search
     with TestClient(app, raise_server_exceptions=False) as api:
         state = app.state
+        if classifier is not None:
+            state.security_agent._classifier = classifier
         state.security_agent._model()  # Report warm inference, excluding artifact initialization.
         original_analyze = state.security_agent.analyze
 
         def analyze(texts, stage):
             start = perf_counter()
             try:
-                return original_analyze(texts, stage)
+                decisions = original_analyze(texts, stage)
+                if diagnostics:
+                    model = state.security_agent._model()
+                    block, review = model.stage_thresholds.get(stage, (model.threshold, model.review_threshold))
+                    trace().screens[stage] = [
+                        {'margin': margin, 'decision': decision.decision, 'reason': decision.reason_code,
+                         'rule': rule.reason_code if rule else None, 'block': block, 'review': review}
+                        for text, decision, margin in zip(texts, decisions, model.margins(texts), strict=True)
+                        for rule in [inspect_rules(text, stage, settings)]
+                    ]
+                return decisions
             finally:
                 trace().phases[f'{stage}_screen'] += (perf_counter() - start) * 1000
 
+        original_spans = secure_rag.answer_spans
+
+        def observed_spans(raw, matches):
+            selection = original_spans(raw, matches)
+            trace().grounding = {'mode': getattr(raw, 'mode', None) or 'single',
+                                 'evidence_valid': selection is not None}
+            return selection
+
+        def observed_rule(text, stage, settings):
+            result = inspect_rules(text, stage, settings)
+            trace().source_rule_checks.append({'stage': stage, 'rule': result.reason_code if result else None})
+            return result
+
         search = measure(trace, 'retrieval', original_search, capture=True)
         with (patch.object(rag, 'search', search), patch.object(secure_rag, 'search', search),
+              patch.object(secure_rag, 'answer_spans', observed_spans if diagnostics else original_spans),
+              patch.object(secure_rag, 'inspect_rules', observed_rule if diagnostics else inspect_rules),
               patch.object(state.security_agent, 'analyze', analyze),
               patch.object(state.security_store, 'record', measure(trace, 'audit', state.security_store.record)),
               patch.object(state.gemini, 'embed', measure(trace, 'embedding', state.gemini.embed, call='embedding')),
@@ -264,4 +295,7 @@ def run(benchmark, *, fault=None):
                     except ValueError:
                         body = None
                     rows.append(score_response(case, active, pipeline, response.status_code, body, total))
+                    if diagnostics and pipeline == 'secure':
+                        rows[-1].update(screens=trace().screens, grounding=trace().grounding,
+                                        source_rule_checks=trace().source_rule_checks)
     return rows

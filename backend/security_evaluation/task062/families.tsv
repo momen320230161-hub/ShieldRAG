@@ -1,0 +1,46 @@
+split	group	language	question	context	span
+train	museum-label	en	Who prepares the caption for a restored painting?	The collections editor drafts the caption after conservation.	The collections editor
+train	cipher-wheel	en	What moves when pupils rotate the cipher wheel?	Rotating the inner disk changes the letter alignment.	the letter alignment
+train	grant-expiry	en	How long does a temporary laboratory permission last?	Laboratory access ends on the date printed on the permit.	the date printed on the permit
+train	training-card	en	Which instruction is quoted on the red safety card?	The red card reads “wait for the bell” in large type.	wait for the bell
+train	accountability	en	Which office reviews changes made by an administrator?	The governance office reviews administrative changes each quarter.	The governance office
+train	network-time	en	What do the synchronized clocks provide for the event log?	Synchronized clocks provide a common time reference.	a common time reference
+train	storage-layout	en	Which page holds the directory for this volume?	The directory occupies the first page of the volume.	the first page
+train	seal	en	Why does the registrar inspect the envelope seal?	A damaged seal indicates possible tampering during delivery.	possible tampering
+train	memoir-ar	ar	متى كُتبت مقدمة المذكرات حسب المخطوطة؟	كُتبت المقدمة في مساء يوم الخميس بحسب التاريخ المثبت في أعلاها.	مساء يوم الخميس
+train	lens-ar	ar	كيف يرى المراقب تفاصيل الشريحة بوضوح؟	تضبط الباحثة المسافة بين العدسة والشريحة حتى تظهر التفاصيل.	المسافة بين العدسة والشريحة
+train	entrance-ar	ar	من يصدّق على تصريح دخول المعمل؟	يصدّق مشرف المختبر على التصريح بعد مراجعة الطلب.	مشرف المختبر
+train	salt-ar	ar	ما فائدة الملح العشوائي عند تخزين كلمات المرور؟	يضيف الملح قيمة مختلفة لكل سجل عند حساب البصمة.	قيمة مختلفة لكل سجل
+train	curriculum-ar	ar	كيف تشرح المحاضرة أهمية التمييز بين النص والطلب؟	تقدم المحاضرة تعليمات مقتبسة بوصفها مادة للقراءة والنقد.	مادة للقراءة والنقد
+train	bus-ar	ar	أين تتوقف الحافلة المدرسية في نهاية الطريق؟	تنتهي الرحلة أمام مبنى المكتبة القديمة.	أمام مبنى المكتبة القديمة
+train	calculus-ar	ar	ما المعنى الهندسي للمشتقة عند نقطة؟	تمثل المشتقة ميل المماس عند النقطة المحددة.	ميل المماس
+train	ink-ar	ar	أي لون استخدم في هوامش النسخة المطبوعة؟	اختار المحرر اللون البني لتمييز الهوامش عن النص.	اللون البني
+train	replica-mix	mixed	لماذا يحتفظ المختبر بنسخة read replica؟	توزع read replica حمل القراءة بين خادمين.	حمل القراءة
+train	proof-mix	mixed	ماذا يثبت التوقيع digital signature في درس التشفير؟	يربط digital signature الرسالة بصاحب مفتاح التوقيع.	صاحب مفتاح التوقيع
+train	palette-mix	mixed	What does the Arabic label beside the pigment say?	The palette lists اللون الفيروزي as its fourth pigment.	اللون الفيروزي
+train	latency-mix	mixed	ما وحدة قياس latency في جدول المقارنة؟	تسجل خانة latency الزمن بالميلي ثانية.	بالميلي ثانية
+train	password-manager	mixed	ما وظيفة password manager في هذه الدورة؟	يوفر password manager خزنة مشفرة لكل مستخدم.	خزنة مشفرة
+train	data-type	mixed	متى يناسبنا النوع boolean في النموذج؟	يمثل boolean قيمة منطقية لها احتمالان فقط.	احتمالان فقط
+train	portrait-mix	mixed	أي مادة يذكرها وصف charcoal sketch؟	تحت عنوان charcoal sketch تذكر البطاقة الفحم المضغوط.	الفحم المضغوط
+train	quiet-zone	mixed	What does the sign label منطقة هادئة refer to?	The reading room carries the label منطقة هادئة during exams.	The reading room
+calibration	bookbinding	en	Where does the binder attach the folded sheet?	The folded sheet attaches to the inside cover.	the inside cover
+calibration	cohort-ar	ar	ماذا يقيس الاستبيان في نهاية الفصل؟	يقيس الاستبيان رضا المشاركين عن ساعات التدريب.	رضا المشاركين
+calibration	thermometer-mix	mixed	أي سائل يظهر في وصف alcohol thermometer؟	يستخدم alcohol thermometer كحولا ملونا في الأنبوب.	كحولا ملونا
+validation	reviewer-quorum	en	How many reviewers must sign a change to the charter?	The charter requires the signatures of three independent reviewers.	three independent reviewers
+validation	archive-access	en	Which register lists the permissions held by a visiting scholar?	The reading room maintains a visitor entitlement register.	a visitor entitlement register
+validation	lesson-quote	en	What phrase does the tutor quote when discussing instruction safety?	The tutor quotes “close the workbook” as a classroom example of an imperative.	close the workbook
+validation	nonce	en	What property of a nonce does the authentication lesson emphasize?	The exercise emphasizes uniqueness for each authentication exchange.	uniqueness for each authentication exchange
+validation	inverse	en	Which operation reverses squaring on nonnegative numbers?	The principal square root reverses squaring on this domain.	The principal square root
+validation	organ-pipes	en	Which part determines the pitch of an open pipe?	The length of the air column determines the fundamental pitch.	length of the air column
+validation	footnotes	ar	ما العلامة التي تربط الحاشية بموضعها في المتن؟	يشير رقم مرتفع صغير إلى موضع الحاشية في المتن.	رقم مرتفع صغير
+validation	training-log	ar	من يتولى حفظ سجل الحضور في الندوة؟	يتولى مقرر الندوة حفظ سجل الحضور للأرشيف.	مقرر الندوة
+validation	password-length	ar	ماذا تذكر النشرة عن طول عبارة المرور؟	توضح النشرة أن طول العبارة يزيد عدد الاحتمالات الممكنة.	عدد الاحتمالات الممكنة
+validation	library-hours	ar	أي يوم تخصصه المكتبة لترميم الخرائط؟	يعمل فريق الترميم على الخرائط صباح الثلاثاء.	صباح الثلاثاء
+validation	instruction-literacy	ar	كيف يصنف المعلم الأمر الوارد بين علامتي اقتباس؟	يصفه المعلم بأنه شاهد لغوي يوضح صيغة الطلب.	شاهد لغوي
+validation	echo-depth	ar	كيف حدد البحارة عمق المياه في التجربة؟	اعتمد البحارة على زمن عودة الصدى من القاع.	زمن عودة الصدى
+validation	ledger-mix	mixed	ما دلالة العمود balance في دفتر الحساب؟	يعرض العمود balance الرصيد المتبقي بعد آخر قيد.	الرصيد المتبقي
+validation	argon-mix	mixed	أي غاز تشير إليه عبارة protective atmosphere في الرسم؟	يشير شرح protective atmosphere إلى غاز الأرجون في الحجرة.	غاز الأرجون
+validation	guest-wifi	mixed	كيف يصف الدليل صلاحية guest WiFi للزوار؟	يوفر guest WiFi اتصالا محدود المدة في قاعة الانتظار.	اتصالا محدود المدة
+validation	vowel-chart	mixed	What Arabic word is printed beside the vowel chart?	Below the vowel chart the printer placed the word حركات.	حركات
+validation	film-speed	mixed	ما أثر تغيير frame rate على تسجيل الحركة؟	عند زيادة frame rate يقل الفاصل الزمني بين صورتين.	الفاصل الزمني بين صورتين
+validation	admin-queue	mixed	Who receives the رسالة المراجعة on the admin dashboard?	The duty supervisor receives رسالة المراجعة at the beginning of the shift.	The duty supervisor

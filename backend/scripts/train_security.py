@@ -6,6 +6,7 @@ the untouched test split is evaluated once after selecting a fixed candidate.
 import hashlib
 import json
 import time
+import tempfile
 from itertools import product
 from pathlib import Path
 
@@ -17,13 +18,14 @@ from sklearn.metrics import confusion_matrix, f1_score, precision_score, recall_
 from sklearn.svm import LinearSVC
 
 from app.core.config import Settings
-from app.security.classifier import BUNDLE_DIR, MODEL_REVISION, VERSION, Classifier
+from app.security.classifier import VERSION, Classifier
 from app.security.dataset import SEED, records, split_records, stage_of
 from app.security.features import FEATURES, vectorizer
 from app.security.rules import inspect_rules
 from evaluation.benchmark import load_benchmark
 
 REPORTS = Path(__file__).resolve().parents[1]/'security_evaluation/task061'
+MODEL_REVISION = 'shield-security-calibration-2'
 
 
 def metrics(y,p):
@@ -89,6 +91,9 @@ def development_probes():
 
 
 def main():
+    # This trainer reproduces Task 06.1. Never replace the runtime bundle or archived reports.
+    out = Path(tempfile.mkdtemp(prefix='shieldrag-train-061-'))
+    bundle = out / 'artifacts'
     rows=records(); splits=split_records(rows)
     transforms=[vectorizer(f[0]) for f in FEATURES]
     text=lambda part:[r['text'] for r in splits[part]]
@@ -154,13 +159,13 @@ def main():
                                     'idf':transform.idf_.tolist()})
     raw=json.dumps(artifact,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()
     dataset_raw=json.dumps(rows,ensure_ascii=False,sort_keys=True).encode()
-    BUNDLE_DIR.mkdir(parents=True,exist_ok=True)
-    (BUNDLE_DIR/'classifier.json').write_bytes(raw)
+    bundle.mkdir()
+    (bundle/'classifier.json').write_bytes(raw)
     manifest={'version':VERSION,'model_revision':MODEL_REVISION,'sha256':hashlib.sha256(raw).hexdigest(),'seed':SEED,
         'dataset_sha256':hashlib.sha256(dataset_raw).hexdigest(),'sklearn_version':sklearn.__version__,
         'source':'project-authored synthetic families; no external benchmark or private content'}
-    (BUNDLE_DIR/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
-    runtime=Classifier()
+    (bundle/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
+    runtime=Classifier(revision=MODEL_REVISION, directory=bundle)
     # Serialization must preserve the trained estimator's decision function.
     for part in splits:
         reconstructed=[]
@@ -193,8 +198,7 @@ def main():
         start=time.perf_counter(); runtime.margins([value]); latencies.append((time.perf_counter()-start)*1000)
     report['latency_ms']={'mean':float(np.mean(latencies)),'p95':float(np.percentile(latencies,95)),
                           'scope':'single-process local per-example inference; not deployment load'}
-    out=REPORTS
-    out.mkdir(exist_ok=True)
+    print(f'Task 06.1 reproduction directory: {out}')
     (out/'classifier-report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     (out/'split-manifest.json').write_text(json.dumps({part:[r['id'] for r in data] for part,data in splits.items()},indent=2)+'\n',encoding='utf-8')
     print(json.dumps({'selected':selected,'validation':measured[selected],'test':report['test_classifier'],

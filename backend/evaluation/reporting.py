@@ -61,7 +61,7 @@ def comparison(report):
         ('Authorization disclosures', *[formatted(m['authorization_failures']) for m in (baseline, secure)]),
         ('Unexpected retrieved chunks by request', *[formatted(m['unexpected_retrieval']) for m in (baseline, secure)]),
     ]
-    title = '# ShieldRAG Task 06.1 offline evaluation'
+    title = '# ShieldRAG offline RAG evaluation'
     blocks = [title, f'**{badge}.** {summary["valid_pairs"]} valid paired cases, '
         f'{summary["executed_requests"]}/{summary["expected_requests"]} requests executed and '
         f'{summary["missing_requests"]} unavailable because they were not executed. '
@@ -77,7 +77,7 @@ def comparison(report):
         'Case order was seeded and first route alternated. The classifier was warmed and the embedding cache was cleared '
         'between requests. No external services were invoked.',
         f"Composition by label {plans['labels']}, by language {plans['languages']} and by role {plans['roles']}. "
-        'The benchmark was authored for Task 06 after the model was fixed and was visible to developers. '
+        'These project-authored cases were visible to developers. '
         'A separate development manifest exercises provider and audit failure paths.',
         '## Threat model',
         'These scenarios represent untrusted user questions, retrieved reference snippets and simulated provider response corruption. '

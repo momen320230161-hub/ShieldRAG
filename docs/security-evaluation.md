@@ -1,6 +1,6 @@
 # Task 06 security evaluation
 
-The [Task 06.1 follow-up](security-quality.md) links the preserved historical run, an identically scripted benchmark replay and a separate development suite for the new secure response contract.
+Task 06.2 compared three versioned model bundles on 18 fresh question/passage/span groups and 12 control texts before replaying the original 44 historical pairs. The independent unit is a question family. A question, its passage and its answer count as a single availability outcome. The retained, rejected and historical results are available side by side. [Release comparison](../backend/security_evaluation/task062/decision.md) · [Earlier Task 06.1 results](security-quality.md#historical-task-061-secure-rag-quality-and-security).
 
 Task 06 compares the existing authenticated Baseline and Secure RAG routes. The offline runner calls the real FastAPI routes, security agent, citation checks and audit client. An in-process Supabase transport models caller identity, fixture scope and audit acknowledgements. A fake Gemini SDK returns scripted responses through the real Gemini parsing and validation code. The comparison therefore exercises application enforcement against controlled faults. It measures neither Gemini's probability of producing those faults nor real database isolation.
 

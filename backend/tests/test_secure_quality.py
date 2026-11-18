@@ -122,10 +122,15 @@ def test_frozen_benchmark_and_separate_development_response_contract():
         assert result['multi_extract'] and result['rubric']['grounded_proxy']
     for case_id in ('d-ar', 'd-quotation'):
         assert secure[case_id]['extractive']
-    # Keep the benign label and surface the measured mixed-language false positive.
+    # The retained classifier releases this exact mixed-language span with verified provenance.
     assert secure['d-mixed']['expected_behavior'] == 'answer'
-    assert secure['d-mixed']['status'] == 'blocked' and secure['d-mixed']['audit']['last_stage'] == 'output'
-    assert not secure['d-mixed']['available']
+    assert secure['d-mixed']['extractive'] and secure['d-mixed']['rubric']['grounded_proxy']
+    assert secure['d-mixed']['audit']['acknowledged']
+    # Preserve the Task 06.1 diagnosis on its actual archived policy.
+    previous = run(dev, classifier=classifier.Classifier(revision='shield-security-calibration-2'))
+    mixed = next(r for r in previous if r['pipeline'] == 'secure' and r['id'] == 'd-mixed')
+    assert mixed['status'] == 'blocked' and mixed['audit']['last_stage'] == 'output'
+    assert not mixed['available']
     assert secure['d-translation']['status'] == 'blocked'
     assert not secure['d-output']['attack_success'] and secure['d-output']['audit']['last_stage'] == 'output'
 
@@ -137,8 +142,9 @@ def test_mixed_language_exact_excerpts_follow_the_same_grounding_invariant():
     assert result.supported and [c.quote for c in result.citations] == list(texts)
 
 
-def test_invalid_stage_manifest_fails_closed_even_with_matching_artifact_digest(tmp_path, monkeypatch):
-    original = classifier.BUNDLE_DIR
+def test_invalid_stage_manifest_fails_closed_even_with_matching_artifact_digest(tmp_path):
+    revision = 'shield-security-calibration-2'
+    original = classifier.REVISIONS[revision]
     model = json.loads((original/'classifier.json').read_text(encoding='utf-8'))
     del model['stage_thresholds']['context']
     data = json.dumps(model).encode()
@@ -146,6 +152,5 @@ def test_invalid_stage_manifest_fails_closed_even_with_matching_artifact_digest(
     manifest['sha256'] = hashlib.sha256(data).hexdigest()
     (tmp_path/'classifier.json').write_bytes(data)
     (tmp_path/'manifest.json').write_text(json.dumps(manifest),encoding='utf-8')
-    monkeypatch.setattr(classifier,'BUNDLE_DIR',tmp_path)
     with pytest.raises(classifier.SecurityUnavailable):
-        classifier.Classifier()
+        classifier.Classifier(revision=revision, directory=tmp_path)

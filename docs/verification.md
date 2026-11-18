@@ -1,4 +1,10 @@
-# Task 06.1 verification
+# Task 06.2 verification
+
+**NOT READY FOR MERGE.** Repeated qualification produced a byte-identical decision lock. Candidate C scored 16/18 on fresh questions and 8/22 on historical questions. The retained Task 05.1 classifier restored 9/22 historical answers, with 0/22 achieved attack objectives, 0/44 scope violations and 9/9 valid benign citations. All 44 secure responses received one acknowledged audit event in the local transport. No live Gemini, Auth, Storage, RLS or database checks were executed in this task. All seven migration files were preserved.
+
+Local verification passed 323 tests, with 43 live integration tests deselected. Dependency checks passed. An existing Starlette/AnyIO deprecation warning remains. The multi-excerpt suite now verifies both the original 06.1 mixed-language refusal and the retained policy's exact, grounded answer. [Evidence and release veto](../backend/security_evaluation/task062/decision.md) · [Reproduction](testing.md#reproduce-task-062).
+
+# Historical Task 06.1 verification
 
 The previous PR #5 head `5d13a56` was verified before changes. The [Task 06.1 review](security-quality.md) records all eleven historical denial causes, calibration data and the revised grounding policy. The 44 historical pairs executed with identical inputs and scoring. The candidate reduced benign refusals in validation from 7/78 to 5/78 but historical Secure benign availability declined from 9/22 to 8/22. Scripted Secure attack successes remained 0/22 and known unauthorized disclosures 0/44. The eight-case development suite recorded three exact multi-excerpt answers, one mixed-language false positive and one withheld free-form translation. **NOT READY FOR MERGE**.
 

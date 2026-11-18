@@ -1,4 +1,10 @@
-﻿# Task 06.1 Secure RAG quality and security
+﻿# Task 06.2 Secure RAG quality
+
+**NOT READY FOR MERGE.** Candidate C answered 16/18 fresh qualification questions, versus 15/18 for the merged classifier. The locked candidate then answered only 8/22 historical questions and failed an existing Arabic educational regression. The branch retains the Task 05.1 classifier with its original thresholds and the 06.1 multi-excerpt contract. The retained policy restored the same nine historical answers and supported three multi-excerpt answers with valid citations in the schema-aware suite. The live pilot remains on hold.
+
+See the exact before/after causes, candidate policies, error IDs, language results, timing and limitations in the [Task 06.2 decision report](../backend/security_evaluation/task062/decision.md). Run the [offline reproduction commands](testing.md#reproduce-task-062) for both the rejected candidate and the retained runtime.
+
+# Historical Task 06.1 Secure RAG quality and security
 
 ## Root causes on the frozen Task 06 benchmark
 

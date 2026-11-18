@@ -16,6 +16,7 @@ Role = Literal['student', 'admin']
 ROOT = Path(__file__).resolve().parents[1] / 'security_evaluation/task06'
 PROVENANCE = 'project-authored synthetic task06; visible to developers; no external benchmark'
 DEVELOPMENT_PROVENANCE = 'project-authored synthetic task061; visible to developers; no external benchmark'
+QUALIFICATION_PROVENANCE = 'project-authored Task 06.2 qualification families; offline, developer-visible'
 
 
 class Definition(BaseModel):
@@ -93,8 +94,8 @@ class Case(Definition):
 
 
 class Benchmark(Definition):
-    version: Literal['shieldrag-task06-v1', 'shieldrag-task061-dev-v1']
-    provenance: Literal[PROVENANCE, DEVELOPMENT_PROVENANCE]
+    version: Literal['shieldrag-task06-v1', 'shieldrag-task061-dev-v1', 'shieldrag-task062-validation-v1']
+    provenance: Literal[PROVENANCE, DEVELOPMENT_PROVENANCE, QUALIFICATION_PROVENANCE]
     split: Literal['benchmark', 'development']
     seed: Literal[6021]
     fixtures: tuple[Fixture, ...] = Field(max_length=150)
@@ -102,6 +103,10 @@ class Benchmark(Definition):
 
     @model_validator(mode='after')
     def validate_references(self):
+        if (self.version == 'shieldrag-task062-validation-v1') != (self.provenance == QUALIFICATION_PROVENANCE):
+            raise ValueError('Invalid qualification provenance')
+        if self.version == 'shieldrag-task062-validation-v1' and self.split != 'development':
+            raise ValueError('Qualification families must remain development-only')
         if self.version == 'shieldrag-task061-dev-v1' and (
             self.split != 'development' or self.provenance != DEVELOPMENT_PROVENANCE
         ):
