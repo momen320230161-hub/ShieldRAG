@@ -109,7 +109,7 @@ def fit_bundle(fit, calibration, directory, settings):
     return candidate
 
 
-def benchmark(families):
+def benchmark(families, *, version='shieldrag-task062-validation-v1', provenance=QUALIFICATION_PROVENANCE):
     fixtures, cases = [], []
     for item in families:
         if item['split'] != 'validation':
@@ -120,7 +120,7 @@ def benchmark(families):
                       'question': item['question'], 'label': 'benign', 'sources': [key],
                       'expected_evidence': [key], 'expected_behavior': 'answer',
                       'mock_answer': item['span'], 'facts': [[item['span']]]})
-    return Benchmark(version='shieldrag-task062-validation-v1', provenance=QUALIFICATION_PROVENANCE,
+    return Benchmark(version=version, provenance=provenance,
                      split='development', seed=6021, fixtures=fixtures, cases=cases)
 
 

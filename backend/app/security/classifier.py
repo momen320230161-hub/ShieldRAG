@@ -12,12 +12,15 @@ from app.security.features import FEATURES, vectorizer
 
 VERSION='shield-security-v1'
 # The deployed audit RPC accepts VERSION as its schema/policy identifier.
-MODEL_REVISION='shield-security-calibration-1'
+OUTPUT_CALIBRATION = 'shield-security-calibration-4'  # Rebuild-only experiment.
+READONLY_POLICY = 'shield-security-calibration-5'
+MODEL_REVISION=READONLY_POLICY
 ARTIFACTS = Path(__file__).resolve().parent / 'artifacts'
 REVISIONS = {
     'shield-security-calibration-1': ARTIFACTS / 'calibration-1',
     'shield-security-calibration-2': ARTIFACTS,
     'shield-security-calibration-3': ARTIFACTS / 'calibration-3',
+    READONLY_POLICY: ARTIFACTS / 'calibration-5',
 }
 BUNDLE_DIR = REVISIONS[MODEL_REVISION]
 # Shipped bundles are immutable. A manifest and model copied together from
@@ -26,6 +29,7 @@ BUNDLE_DIGESTS = {
     'shield-security-calibration-1': '92021975d6b1f5e6bc5f1fed836b502e2485126308b1c8dbc61c858f20306d85',
     'shield-security-calibration-2': '3d3434cf75f010f573de697745a0161e90bade63e62740c63a27381e07b137fd',
     'shield-security-calibration-3': '1f9f49cf028894dc10106b9707b8afe82deeb3bd98d5eea3cb6b21efb5cacaff',
+    READONLY_POLICY: 'fa68f0c166edf201a0a80412f53bb10ef5c863f05f6306d9d1e81d4e29c3887e',
 }
 
 
@@ -37,7 +41,7 @@ class Classifier:
     def __init__(self, *, revision=None, directory=None):
         try:
             expected = MODEL_REVISION if revision is None else revision
-            if expected not in REVISIONS:
+            if expected not in REVISIONS and not (expected == OUTPUT_CALIBRATION and directory is not None):
                 raise ValueError('Unknown model revision')
             shipped = directory is None
             directory = directory or (BUNDLE_DIR if revision is None else REVISIONS[expected])
@@ -61,9 +65,12 @@ class Classifier:
             self.revision = expected
             self.digest = manifest['sha256']
             stages=model.get('stage_thresholds', {})
-            expected_stages = {'input','context'} if expected == 'shield-security-calibration-2' else set()
+            expected_stages = {'shield-security-calibration-2': {'input', 'context'},
+                               OUTPUT_CALIBRATION: {'output'}, READONLY_POLICY: {'output'}}.get(expected, set())
             if not isinstance(stages,dict) or set(stages)!=expected_stages:
                 raise ValueError('Stage policy schema')
+            if expected == READONLY_POLICY and model.get('output_guard') != 'read-only-authority-v1':
+                raise ValueError('Output policy identity')
             self.stage_thresholds={stage: (float(cuts['threshold']),float(cuts['review_threshold']))
                 for stage,cuts in stages.items()}
             if (not math.isfinite(self.threshold) or not math.isfinite(self.review_threshold)

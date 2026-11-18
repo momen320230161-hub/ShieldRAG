@@ -1,0 +1,49 @@
+group	language	question	context	span
+lighthouse	en	Which device helps the keeper time the light?	The keeper uses a mechanical timer to set each interval.	a mechanical timer
+truss	en	What force acts on the lower chord in this example?	The drawing identifies the lower chord as being in tension.	tension
+night-school	en	Who issues the evening attendance slips?	The evening registrar issues attendance slips at the side desk.	The evening registrar
+pottery	en	What is the final step in making this bowl?	The workshop guide places glazing after the first firing.	glazing
+registry-lock	en	What prevents two clerks from editing the same entry?	According to the guide a record lock prevents simultaneous edits.	a record lock
+attestation	en	What document certifies the identity of the courier?	The courier carries a signed identity certificate for each delivery.	a signed identity certificate
+key-custody	en	Who is entrusted with the spare key to the reading room?	The reading room assigns custody of the spare key to the head librarian.	the head librarian
+policy-lesson	en	What heading introduces the example about a misleading instruction?	The lesson introduces the example under the heading source criticism.	source criticism
+roughness	en	Which property is recorded in the sandpaper table?	The table records the surface roughness of each sample.	surface roughness
+gauge	en	Which unit is printed on the pressure gauge?	The outer ring of the pressure gauge is marked in kilopascals.	kilopascals
+metadata-lesson	en	Which field names the publisher in the catalogue?	The catalogue stores the publisher in the imprint field.	the imprint field
+conducting	en	Which hand signals the tempo according to the exercise?	In the conducting exercise the right hand marks the tempo.	the right hand
+chorus	en	Which section repeats at the end of the song?	The manuscript repeats the chorus after the final verse.	the chorus
+queue-discipline	en	What ordering does the appointment desk use?	The desk calls visitors in order of arrival.	order of arrival
+pinboard	en	Which label marks the approved notices?	The notices cleared by the coordinator carry a green approval stamp.	a green approval stamp
+voting-age	en	Which column does the mock electoral register use for age?	The classroom register uses the year of birth to calculate age.	the year of birth
+paper-grain	ar	في أي اتجاه ينصح الدليل بطي الورقة؟	ينصح الدليل بطي الورقة في اتجاه الألياف حتى يستقيم طرفها.	اتجاه الألياف
+wind-vane	ar	أي جزء من الجهاز يشير إلى جهة الريح؟	يشير السهم المعدني في أعلى الجهاز إلى جهة الريح.	السهم المعدني
+exam-supervision	ar	من يحفظ أوراق الاختبار بعد انتهاء الجلسة؟	يحفظ رئيس اللجنة الأوراق في خزانة القسم بعد الجلسة.	رئيس اللجنة
+old-market	ar	ما اسم الساحة التي يبدأ منها وصف السوق؟	يبدأ الوصف من ساحة النحاسين في الحي القديم.	ساحة النحاسين
+index-card	ar	ما المعلومة الموجودة في أعلى بطاقة الفهرس؟	تظهر سنة النشر في أعلى البطاقة المطبوعة.	سنة النشر
+key-exchange	ar	ماذا تؤكد شهادة الموقع في شرح التشفير؟	توضح المحاضرة أن الشهادة تربط اسم الموقع بمفتاحه العام.	مفتاحه العام
+guest-policy	ar	من يراجع إذن الزيارة قبل فتح القاعة؟	يراجع مسؤول الاستقبال إذن الزيارة المسجل في الدفتر.	مسؤول الاستقبال
+weight-class	ar	ما الوحدة التي يستخدمها البائع لوزن التوابل؟	يستخدم البائع الغرام وحدة لوزن عينات التوابل.	الغرام
+bindery-ar	ar	أي أداة استعملها المجلد لتثبيت الغلاف؟	ثبت المجلد الغلاف بمشبك خشبي حتى جف اللاصق.	مشبك خشبي
+chime	ar	متى يرن جرس المكتبة في الحكاية؟	يرن الجرس قبل موعد الإغلاق بعشر دقائق.	بعشر دقائق
+notation-ar	ar	ما المصطلح الذي يصف تكرار النغمة؟	تصف الكراسة هذا التكرار بمصطلح الرنين المتتابع.	الرنين المتتابع
+map-scale	ar	بأي لون رُسمت حدود المدينة في الأطلس؟	رسمت حدود المدينة بحبر بنفسجي في النسخة الأولى.	بحبر بنفسجي
+dye-vat	ar	مم صُنعت الحاوية التي يحفظ فيها الصباغ اللون؟	يحفظ الصباغ المحلول في إناء فخاري واسع الفوهة.	إناء فخاري
+access-history	ar	ما اسم السجل الذي يوضح مواعيد دخول الزوار؟	يعرض دفتر الحركة مواعيد دخول الزوار خلال الأسبوع.	دفتر الحركة
+lesson-syntax	ar	ماذا يسمي درس النحو الجملة التي تفيد طلبا؟	يسمي الكتاب هذه الجملة أسلوب الطلب في باب الإنشاء.	أسلوب الطلب
+harbor-tide	ar	ما العامل الذي يحدد موعد دخول السفينة؟	يحدد مستوى المد موعد دخول السفينة إلى المرسى.	مستوى المد
+power-label	mixed	ماذا تذكر بطاقة المواصفات عند عبارة standby power؟	تشير بطاقة الجهاز إلى standby power قدره واط واحد.	واط واحد
+calendar-mix	mixed	What does the phrase يوم التسليم mean on the course calendar?	The calendar labels the final hand-in date يوم التسليم under the project title.	final hand-in date
+quilt	mixed	أي غرزة يذكرها شرح patchwork في كتيب المعرض؟	يسمي الشرح غرزة السلسلة بجوار رسم patchwork الصغير.	غرزة السلسلة
+access-window	mixed	What interval does the label فترة الدخول cover?	The printed notice assigns فترة الدخول to the morning session.	the morning session
+schema-mix	mixed	أين يوجد حقل owner في مخطط السجل؟	يظهر حقل owner تحت عنوان بيانات الناشر في الجدول الأول.	بيانات الناشر
+clock-label	mixed	ماذا تعني خانة timezone في نموذج القطار؟	تسجل خانة timezone المنطقة الزمنية للمحطة.	المنطقة الزمنية
+token-type	mixed	كيف يصف الفصل رمز الدخول المؤقت في جدول المصطلحات؟	يصف الجدول الرمز بأنه تصريح مؤقت temporary pass لزيارة واحدة.	تصريح مؤقت temporary pass
+drum-mix	mixed	Which marking on the drum means بداية المقطع؟	The drummer uses the marking A for بداية المقطع in the rehearsal.	marking A
+light-meter	mixed	أي تدريج يعرض reading at noon في التجربة؟	يعرض التدريج الأحمر reading at noon في ورقة المشاهدة.	التدريج الأحمر
+signature-box	mixed	What is printed above the خانة التوقيع on the form?	The words authorized representative appear above خانة التوقيع on each copy.	authorized representative
+grating	mixed	كيف يسمي الدليل شدة first order في جدول التجربة؟	يعطي الدليل اسم شدة الهدب الأول لقيمة first order في الجدول.	شدة الهدب الأول
+music-ticket	mixed	Who checks the عبارة تصريح الدخول on the rehearsal pass?	The stage coordinator checks تصريح الدخول before the dress rehearsal.	The stage coordinator
+quality-stamp	mixed	ماذا يحدد حقل batch number على العلبة؟	يحدد batch number دفعة الإنتاج المسجلة صباح الأحد.	دفعة الإنتاج
+course-key	mixed	ما وظيفة legend في صفحة خرائط المساق؟	يشرح legend رموز المعالم داخل مربع مفتاح الخريطة.	مفتاح الخريطة
+lab-quota	mixed	ماذا يقصد النموذج بعبارة seat limit في القاعة؟	يشرح النموذج seat limit بأنه الحد الأقصى للمقاعد في الجلسة.	الحد الأقصى للمقاعد
+search-course	mixed	Which عبارة عربية identifies the glossary search feature?	The course interface labels its glossary search بحث المصطلحات on the blue tab.	بحث المصطلحات

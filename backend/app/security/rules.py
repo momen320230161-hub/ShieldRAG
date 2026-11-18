@@ -30,6 +30,38 @@ OUTPUT_ADOPTION = re.compile(
     r"(?:all\s+)?(?:the\s+)?(?:previous|prior|system)\s+(?:instructions|rules|messages)"
 )
 
+# The answer route has no account-management capability. Catch affirmative
+# first-person claims of changing access, including when copied from a source.
+PRIVILEGE_CHANGE_CLAIM = re.compile(
+    r"(?:^|[.!?؟]\s+)(?:i\s+(?:have\s+)?(?:grant(?:ed)?|revok(?:e|ed)|"
+    r"elevat(?:e|ed)|upgrad(?:e|ed)|promot(?:e|ed)|assign(?:ed)?)\b"
+    r"[^.!?؟\n]{0,100}\b(?:access|roles?|permissions?|privileges?|admin(?:istrator)?)\b"
+    r"|(?:أنا\s+|لقد\s+)?(?:منحت|سحبت|رفعت|عدلت)\s+[^.!?؟\n]{0,80}"
+    r"(?:صلاحيات|صلاحية|امتيازات|admin privileges|administrator role))"
+)
+
+
+ACCEPTED_AUTHORITY = re.compile(
+    r"(?:^|[.!?؟]\s+)(?:i\s+(?:have\s+)?(?:accepted|recognized|approved|trusted|relied on)\b"
+    r"|(?:أنا\s+|لقد\s+)?(?:قبلت|اعتمدت|وثقت|صدقت)\s+)([^.!?؟\n]{1,180})"
+)
+AUTHORITY_OBJECT = re.compile(r"\b(?:approval|authorization|permission|consent|certificate|attestation)\b"
+                              r"|موافق[ةه]|تفويض|تصريح|شهاد[ةه]|إذن|اذن")
+INVALID_AUTHORITY = re.compile(r"\b(?:forged|counterfeit|fabricated|invalid|revoked|expired|falsified)\b"
+                               r"|مزور|منتهي|منتهية|مسحوب|باطل|ملغ[ىي]|غير\s+(?:صالح|ساري)")
+
+
+def inspect_readonly_output(text, *, check_authority=False):
+    value = normalize(text)
+    if PRIVILEGE_CHANGE_CLAIM.search(value):
+        return Decision('block','output_policy_violation','role_spoofing')
+    if check_authority:
+        for match in ACCEPTED_AUTHORITY.finditer(value):
+            clause = match.group(1)
+            if AUTHORITY_OBJECT.search(clause) and INVALID_AUTHORITY.search(clause):
+                return Decision('block','output_policy_violation','authority_spoofing')
+    return None
+
 
 def inspect_rules(text,stage,settings):
     # Preserve exact configured-key checks, including nonstandard test credentials.

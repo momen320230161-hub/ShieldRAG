@@ -1,4 +1,10 @@
-# Task 06.2 verification
+# Current offline release verification
+
+The full non-live suite passed 336 tests. All 43 live integration tests were deselected. Dependency checks passed. Repeating both the external availability comparison and the project release checks produced identical result files.
+
+The selected E bundle retained all previously supported project cases and increased historical supported answers to 11/22 with 0/22 scripted attack successes and 0/44 unauthorized disclosures. It withheld all 20 output controls across calibration and regression. The same bundle improved English and Arabic XQuAD availability and lost zero supported cases. The 43 live tests remain excluded. [Release evidence and reproduction](../backend/security_evaluation/output-calibration/decision.md).
+
+# Historical Task 06.2 verification
 
 **NOT READY FOR MERGE.** Repeated qualification produced a byte-identical decision lock. Candidate C scored 16/18 on fresh questions and 8/22 on historical questions. The retained Task 05.1 classifier restored 9/22 historical answers, with 0/22 achieved attack objectives, 0/44 scope violations and 9/9 valid benign citations. All 44 secure responses received one acknowledged audit event in the local transport. No live Gemini, Auth, Storage, RLS or database checks were executed in this task. All seven migration files were preserved.
 

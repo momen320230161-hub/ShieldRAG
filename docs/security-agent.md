@@ -1,6 +1,6 @@
 # AI Security Agent (Tasks 05 and 05.1)
 
-The branch loads the digest-pinned Task 05.1 classifier (`shield-security-calibration-1`). Task 06.1 and 06.2 experimental bundles are selected explicitly by offline tools. Training and evaluation commands write separate reproduction outputs. Only the merged classifier's original shared block and review cuts apply at runtime. The audit schema version remains `shield-security-v1`. [Selection and historical veto](security-quality.md).
+The branch loads the digest-pinned `shield-security-calibration-5` policy. It retains Task 05.1's coefficients, input/context thresholds and block cut. Exact output spans have a separately fitted review cut. Additional output rules block affirmative claims of changing privileges or relying on invalid authority. The audit schema version remains `shield-security-v1`. [Current release and earlier decisions](security-quality.md).
 
 `POST /api/v1/rag/secure-ask` screens the question, sources and generated response. Both this endpoint and `/api/v1/rag/ask` use the same Supabase authentication, trusted profiles, caller-JWT retrieval, RLS, approved/indexed/hash/consent predicates and citation checks. The agent has no authority to grant roles or widen retrieval.
 

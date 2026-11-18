@@ -1,5 +1,7 @@
 # Task 06 security evaluation
 
+The current release compares the merged 05.1 incumbent, a rejected output calibration and the selected read-only output policy. The external comparison uses every English and Arabic XQuAD question with gold-span generation through the local HTTP routes. [Results and validation limits](../backend/security_evaluation/output-calibration/decision.md).
+
 Task 06.2 compared three versioned model bundles on 18 fresh question/passage/span groups and 12 control texts before replaying the original 44 historical pairs. The independent unit is a question family. A question, its passage and its answer count as a single availability outcome. The retained, rejected and historical results are available side by side. [Release comparison](../backend/security_evaluation/task062/decision.md) · [Earlier Task 06.1 results](security-quality.md#historical-task-061-secure-rag-quality-and-security).
 
 Task 06 compares the existing authenticated Baseline and Secure RAG routes. The offline runner calls the real FastAPI routes, security agent, citation checks and audit client. An in-process Supabase transport models caller identity, fixture scope and audit acknowledgements. A fake Gemini SDK returns scripted responses through the real Gemini parsing and validation code. The comparison therefore exercises application enforcement against controlled faults. It measures neither Gemini's probability of producing those faults nor real database isolation.

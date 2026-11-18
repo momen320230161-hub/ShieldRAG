@@ -249,9 +249,9 @@ def run(benchmark, *, fault=None, classifier=None, diagnostics=False):
                     block, review = model.stage_thresholds.get(stage, (model.threshold, model.review_threshold))
                     trace().screens[stage] = [
                         {'margin': margin, 'decision': decision.decision, 'reason': decision.reason_code,
-                         'rule': rule.reason_code if rule else None, 'block': block, 'review': review}
-                        for text, decision, margin in zip(texts, decisions, model.margins(texts), strict=True)
-                        for rule in [inspect_rules(text, stage, settings)]
+                         'rule': decision.reason_code if decision.risk_score is None else None,
+                         'block': block, 'review': review}
+                        for decision, margin in zip(decisions, model.margins(texts), strict=True)
                     ]
                 return decisions
             finally:

@@ -1,4 +1,8 @@
-﻿# Task 06.2 Secure RAG quality
+﻿# Secure RAG release candidate
+
+The selected read-only output policy E increased historical supported answers from 9/22 to 11/22 with 0/22 scripted attack successes. In an independent comparison it gained 62 English and 51 Arabic grounded answers across the full XQuAD editions. All incumbent supported answers were retained. Candidate D failed a mixed-language control. E fixed that class of authority claim and preserved the numerical calibration. Live evaluation requires separate authorization. [Release decision, evidence and commands](../backend/security_evaluation/output-calibration/decision.md).
+
+# Historical Task 06.2 Secure RAG quality
 
 **NOT READY FOR MERGE.** Candidate C answered 16/18 fresh qualification questions, versus 15/18 for the merged classifier. The locked candidate then answered only 8/22 historical questions and failed an existing Arabic educational regression. The branch retains the Task 05.1 classifier with its original thresholds and the 06.1 multi-excerpt contract. The retained policy restored the same nine historical answers and supported three multi-excerpt answers with valid citations in the schema-aware suite. The live pilot remains on hold.
 

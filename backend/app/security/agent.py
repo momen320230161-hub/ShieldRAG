@@ -1,9 +1,9 @@
 import threading
 import asyncio
 
-from app.security.classifier import Classifier, SecurityUnavailable
+from app.security.classifier import Classifier, OUTPUT_CALIBRATION, READONLY_POLICY, SecurityUnavailable
 from app.security.decisions import Decision
-from app.security.rules import inspect_rules, normalize
+from app.security.rules import inspect_readonly_output, inspect_rules, normalize
 
 
 class SecurityAgent:
@@ -29,6 +29,9 @@ class SecurityAgent:
             # Required model integrity is verified even when a rule would block.
             model=self._model()
             rules=[inspect_rules(t,stage,self.settings) for t in texts]
+            if stage == 'output' and model.revision in (OUTPUT_CALIBRATION, READONLY_POLICY):
+                rules = [rule or inspect_readonly_output(t, check_authority=model.revision == READONLY_POLICY)
+                         for rule, t in zip(rules, texts, strict=True)]
             margins=model.margins([normalize(t) for t in texts])
             block,review=model.stage_thresholds.get(stage,(model.threshold,model.review_threshold))
             decisions=[]

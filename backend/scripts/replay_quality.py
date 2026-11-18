@@ -3,7 +3,7 @@ import argparse
 import json
 from pathlib import Path
 
-from app.security.classifier import Classifier, MODEL_REVISION
+from app.security.classifier import Classifier
 from evaluation.benchmark import ROOT, load_benchmark
 from evaluation.reporting import build_report, write
 from evaluation.runner import run
@@ -38,10 +38,10 @@ def archived_traces(historical):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-dir', type=Path, required=True)
-    parser.add_argument('--retained', action='store_true', help='Audit the runtime policy after the release veto')
+    parser.add_argument('--retained', action='store_true', help='Replay the archived Task 06.2 retained policy')
     args = parser.parse_args()
     lock = json.loads((REPORTS / 'selection.json').read_bytes())
-    revision = MODEL_REVISION if args.retained else lock['selected']
+    revision = A if args.retained else lock['selected']
     model = Classifier(revision=revision)
     if model.digest != lock['candidates'][revision]['digest']:
         raise ValueError('Locked artifact mismatch')

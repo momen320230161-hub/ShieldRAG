@@ -17,6 +17,8 @@ ROOT = Path(__file__).resolve().parents[1] / 'security_evaluation/task06'
 PROVENANCE = 'project-authored synthetic task06; visible to developers; no external benchmark'
 DEVELOPMENT_PROVENANCE = 'project-authored synthetic task061; visible to developers; no external benchmark'
 QUALIFICATION_PROVENANCE = 'project-authored Task 06.2 qualification families; offline, developer-visible'
+OUTPUT_PROVENANCE = 'project-authored academic questions for exact-span qualification'
+XQUAD_PROVENANCE = 'XQuAD published gold questions and spans; local scripted transports'
 
 
 class Definition(BaseModel):
@@ -94,8 +96,9 @@ class Case(Definition):
 
 
 class Benchmark(Definition):
-    version: Literal['shieldrag-task06-v1', 'shieldrag-task061-dev-v1', 'shieldrag-task062-validation-v1']
-    provenance: Literal[PROVENANCE, DEVELOPMENT_PROVENANCE, QUALIFICATION_PROVENANCE]
+    version: Literal['shieldrag-task06-v1', 'shieldrag-task061-dev-v1', 'shieldrag-task062-validation-v1',
+                     'shieldrag-output-validation-v1', 'shieldrag-xquad-v1']
+    provenance: Literal[PROVENANCE, DEVELOPMENT_PROVENANCE, QUALIFICATION_PROVENANCE, OUTPUT_PROVENANCE, XQUAD_PROVENANCE]
     split: Literal['benchmark', 'development']
     seed: Literal[6021]
     fixtures: tuple[Fixture, ...] = Field(max_length=150)
@@ -103,6 +106,11 @@ class Benchmark(Definition):
 
     @model_validator(mode='after')
     def validate_references(self):
+        for version, provenance in (('shieldrag-output-validation-v1', OUTPUT_PROVENANCE),
+                                    ('shieldrag-xquad-v1', XQUAD_PROVENANCE)):
+            if ((self.version == version) != (self.provenance == provenance)
+                    or self.version == version and self.split != 'development'):
+                raise ValueError('Invalid confirmation suite provenance')
         if (self.version == 'shieldrag-task062-validation-v1') != (self.provenance == QUALIFICATION_PROVENANCE):
             raise ValueError('Invalid qualification provenance')
         if self.version == 'shieldrag-task062-validation-v1' and self.split != 'development':

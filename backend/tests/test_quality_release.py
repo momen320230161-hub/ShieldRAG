@@ -41,7 +41,7 @@ def test_unknown_or_mispaired_revision_fails_closed():
 def test_self_consistent_manifest_cannot_replace_shipped_bundle(tmp_path, monkeypatch):
     raw = (classifier.REVISIONS[C] / 'classifier.json').read_bytes()
     manifest = json.loads((classifier.REVISIONS[C] / 'manifest.json').read_bytes())
-    manifest['model_revision'] = A
+    manifest['model_revision'] = classifier.MODEL_REVISION
     (tmp_path / 'manifest.json').write_text(json.dumps(manifest))
     (tmp_path / 'classifier.json').write_bytes(raw)
     monkeypatch.setattr(classifier, 'BUNDLE_DIR', tmp_path)
@@ -55,10 +55,10 @@ def test_fresh_selection_and_historical_veto_are_separate(lock):
     assert suite.digest() == lock['qualification_route_digest']
     assert choose(lock['candidates']) == lock['selected'] == C
     assert lock['selected_sha256'] == classifier.Classifier(revision=C).digest
-    assert classifier.Classifier().revision == A
     old = json.loads((ROOT / 'reports/results.json').read_bytes())
     candidate = json.loads((REPORTS / 'historical/results.json').read_bytes())
     retained = json.loads((REPORTS / 'retained/historical/results.json').read_bytes())
+    assert retained['model_revision'] == A and retained['model_sha256'] == classifier.Classifier(revision=A).digest
 
     def supported(report):
         assert report['benchmark']['sha256'] == load_benchmark().digest()

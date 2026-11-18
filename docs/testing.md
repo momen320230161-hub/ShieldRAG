@@ -1,5 +1,7 @@
 # Testing and live verification
 
+The current offline release check covers both FastAPI routes, read-only output claims, comparative answer availability and the complete English and Arabic XQuAD editions. Source data stay in an ignored directory. [Reproduction commands and the separately authorized live proposal](../backend/security_evaluation/output-calibration/decision.md#reproduction).
+
 ## Reproduce Task 06.2
 
 From `backend` with the locked Python 3.12 environment, reproduce qualification in an ignored directory, compare selection-file hashes, then replay both the locked experiment and the retained release policy. The checked-in selection SHA-256 is `cd78c6cc29a4d5b428aae0d70482cd400755fa0514fbf87bda56de1753007ff0` on the documented environment. Timing may vary. All provider transports in these commands are local fixtures.

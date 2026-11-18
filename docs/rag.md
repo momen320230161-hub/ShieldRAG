@@ -1,5 +1,7 @@
 # Baseline RAG (Task 04)
 
+Current Secure RAG uses the same exact-span and multi-excerpt contract with read-only output policy E. Its output review threshold and read-only assertion checks are versioned with this runtime release. [Release evidence](../backend/security_evaluation/output-calibration/decision.md).
+
 Task 06.2 retained the Task 05.1 classifier for Secure RAG and verified the 06.1 exact multi-excerpt contract separately. The retained route answered 6/7 benign questions in the schema-aware development suite. Exact source identity, post-generation access recheck and an acknowledged audit precede release. The baseline route still uses its own schema. [Grounding results and limitations](../backend/security_evaluation/task062/decision.md#exact-excerpts-and-authorization).
 
 Authenticated Admin explicitly authorizes external processing of an approved original. The backend acquires a database lease, downloads private bytes, verifies original SHA-256, extracts in an isolated subprocess, chunks deterministically, and requests Gemini document embeddings. It checks the original again before publishing the entire index in one database transaction. No database transaction remains open during extraction or Gemini calls.
