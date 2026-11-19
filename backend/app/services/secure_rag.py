@@ -3,7 +3,7 @@ import logging
 from fastapi import HTTPException
 from starlette.concurrency import run_in_threadpool
 
-from app.schemas.rag import GeneratedAnswer
+from app.schemas.rag import GeneratedAnswer, SecureGeneratedAnswer
 from app.schemas.security import SecureResult, SecuritySummary
 from app.security.classifier import SecurityUnavailable
 from app.security.decisions import Decision
@@ -12,6 +12,27 @@ from app.services.gemini import UnsafeGeneratedAnswer
 from app.services.rag import ABSTENTION, search, valid_evidence, validate_answer
 
 logger=logging.getLogger(__name__)
+INVALID_SUPPORT = Decision('block','output_policy_violation','invalid_source_support')
+
+
+def answer_spans(raw, matches):
+    """Return screened candidates and server-owned rendering, or reject unsupported claims."""
+    span = raw.answer.strip()
+    if isinstance(raw, SecureGeneratedAnswer) and raw.mode == 'extracts':
+        quoted = [e.quote for e in raw.evidence]
+        source_ids = {e.source_id for e in raw.evidence}
+        if (not raw.supported or raw.answer or not 2 <= len(quoted) <= 4
+                or len(source_ids) != len(quoted)
+                or any(quote.strip() != quote or quote.splitlines() != [quote] for quote in quoted)
+                or not valid_evidence(raw, matches)
+                or len({matches[i].chunk_id for i in source_ids}) != len(quoted)):
+            return None
+        rendered = '\n\n'.join(f'[{position}] {quote}' for position, quote in enumerate(quoted, 1))
+        return quoted, rendered
+    if raw.supported and (not span or not valid_evidence(raw, matches)
+            or not any(span in e.quote for e in raw.evidence)):
+        return None
+    return [span] if span else [], span
 
 
 def denied(decision):
@@ -64,21 +85,23 @@ async def secure_ask(gateway,gemini,agent,audit,principal,question,settings):
             if not isinstance(raw,GeneratedAnswer):
                 raise SecurityUnavailable('Unexpected answer schema')
             error_reason='classifier_error'
-            span=raw.answer.strip()
-            if raw.supported and (not span or not valid_evidence(raw,matches)
-                    or not any(span in evidence.quote for evidence in raw.evidence)):
-                return await block(Decision('block','output_policy_violation','invalid_source_support'),'output')
-            # Analyze the answer once. Quotes are checked independently by rules
-            # and must be exact substrings of previously screened source chunks.
+            selection = answer_spans(raw, matches)
+            if selection is None:
+                return await block(INVALID_SUPPORT, 'output')
+            spans, rendered = selection
+            # Rules screen each quote, and screened spans never contain arbitrary generated prose.
             for evidence in raw.evidence:
                 if violation := inspect_rules(evidence.quote,'output',settings):
                     return await block(violation,'output')
-            if span:
-                output=(await analyze([span],'output'))[0]
-                if output.decision!='allow':
-                    return await block(output,'output')
+            if len(spans) > 1 and (violation := inspect_rules(rendered,'output',settings)):
+                return await block(violation,'output')
+            if spans:
+                outputs = await analyze(spans, 'output')
+                violation = max(outputs, key=lambda decision: {'allow': 0, 'review': 1, 'block': 2}[decision.decision])
+                if violation.decision != 'allow':
+                    return await block(violation, 'output')
             error_reason='provider_unavailable'
-            result=await validate_answer(gateway,principal,matches,raw.model_copy(update={'answer':span}),settings)
+            result=await validate_answer(gateway,principal,matches,raw.model_copy(update={'answer':rendered}),settings)
         else:
             result=None
         # Require an audit acknowledgement before releasing any secure response.

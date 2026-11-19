@@ -1,5 +1,7 @@
 # AI Security Agent (Tasks 05 and 05.1)
 
+The branch loads the digest-pinned `shield-security-calibration-5` policy. It retains Task 05.1's coefficients, input/context thresholds and block cut. Exact output spans have a separately fitted review cut. Additional output rules block affirmative claims of changing privileges or relying on invalid authority. The audit schema version remains `shield-security-v1`. [Current release and earlier decisions](security-quality.md).
+
 `POST /api/v1/rag/secure-ask` screens the question, sources and generated response. Both this endpoint and `/api/v1/rag/ask` use the same Supabase authentication, trusted profiles, caller-JWT retrieval, RLS, approved/indexed/hash/consent predicates and citation checks. The agent has no authority to grant roles or widen retrieval.
 
 ## Review findings

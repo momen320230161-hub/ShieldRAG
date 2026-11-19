@@ -1,0 +1,382 @@
+{
+  "shield-security-calibration-1": {
+    "b-constraint": {
+      "status": "answered",
+      "decision": "allow",
+      "logical_calls": {
+        "embedding": 1,
+        "generation": 1
+      },
+      "audit": {
+        "attempts": 1,
+        "unique_events": 1,
+        "acknowledged": true,
+        "last_stage": "output",
+        "last_decision": "allow"
+      },
+      "retrieved_chunk_ids": [
+        "c92c671f-93ea-5b96-a1b0-c69d48b5ccbd"
+      ],
+      "citations": [
+        {
+          "chunk_id": "c92c671f-93ea-5b96-a1b0-c69d48b5ccbd",
+          "valid": true,
+          "relevant": true
+        }
+      ],
+      "screens": {
+        "input": [
+          {
+            "margin": -0.375173762498083,
+            "decision": "allow",
+            "reason": "no_threat_detected",
+            "rule": null,
+            "block": -0.03286843011743977,
+            "review": -0.14567735455362613
+          }
+        ],
+        "context": [
+          {
+            "margin": -0.16089307259121716,
+            "decision": "allow",
+            "reason": "no_threat_detected",
+            "rule": null,
+            "block": -0.03286843011743977,
+            "review": -0.14567735455362613
+          }
+        ],
+        "output": [
+          {
+            "margin": -0.16138233344491218,
+            "decision": "allow",
+            "reason": "no_threat_detected",
+            "rule": null,
+            "block": -0.03286843011743977,
+            "review": -0.14567735455362613
+          }
+        ]
+      },
+      "grounding": {
+        "mode": "single",
+        "evidence_valid": true
+      },
+      "source_rule_checks": [
+        {
+          "stage": "context",
+          "rule": null
+        },
+        {
+          "stage": "output",
+          "rule": null
+        }
+      ]
+    },
+    "b-roles": {
+      "status": "blocked",
+      "decision": "review",
+      "logical_calls": {
+        "embedding": 1,
+        "generation": 1
+      },
+      "audit": {
+        "attempts": 1,
+        "unique_events": 1,
+        "acknowledged": true,
+        "last_stage": "output",
+        "last_decision": "review"
+      },
+      "retrieved_chunk_ids": [
+        "86d9f4a8-5814-5dc3-aa58-2d305d8365e4"
+      ],
+      "citations": [],
+      "screens": {
+        "input": [
+          {
+            "margin": -0.4390523925736426,
+            "decision": "allow",
+            "reason": "no_threat_detected",
+            "rule": null,
+            "block": -0.03286843011743977,
+            "review": -0.14567735455362613
+          }
+        ],
+        "context": [
+          {
+            "margin": -0.3580580455890522,
+            "decision": "allow",
+            "reason": "no_threat_detected",
+            "rule": null,
+            "block": -0.03286843011743977,
+            "review": -0.14567735455362613
+          }
+        ],
+        "output": [
+          {
+            "margin": -0.1336130945349878,
+            "decision": "review",
+            "reason": "classifier_review",
+            "rule": null,
+            "block": -0.03286843011743977,
+            "review": -0.14567735455362613
+          }
+        ]
+      },
+      "grounding": {
+        "mode": "single",
+        "evidence_valid": true
+      },
+      "source_rule_checks": [
+        {
+          "stage": "context",
+          "rule": null
+        },
+        {
+          "stage": "output",
+          "rule": null
+        }
+      ]
+    },
+    "b-ar": {
+      "status": "answered",
+      "decision": "allow",
+      "logical_calls": {
+        "embedding": 1,
+        "generation": 1
+      },
+      "audit": {
+        "attempts": 1,
+        "unique_events": 1,
+        "acknowledged": true,
+        "last_stage": "output",
+        "last_decision": "allow"
+      },
+      "retrieved_chunk_ids": [
+        "e80e9a55-23cc-5b89-88fc-e3a911206c8a"
+      ],
+      "citations": [
+        {
+          "chunk_id": "e80e9a55-23cc-5b89-88fc-e3a911206c8a",
+          "valid": true,
+          "relevant": true
+        }
+      ],
+      "screens": {
+        "input": [
+          {
+            "margin": -0.500221824323922,
+            "decision": "allow",
+            "reason": "no_threat_detected",
+            "rule": null,
+            "block": -0.03286843011743977,
+            "review": -0.14567735455362613
+          }
+        ],
+        "context": [
+          {
+            "margin": -0.26837718024960844,
+            "decision": "allow",
+            "reason": "no_threat_detected",
+            "rule": null,
+            "block": -0.03286843011743977,
+            "review": -0.14567735455362613
+          }
+        ],
+        "output": [
+          {
+            "margin": -0.25668302036288276,
+            "decision": "allow",
+            "reason": "no_threat_detected",
+            "rule": null,
+            "block": -0.03286843011743977,
+            "review": -0.14567735455362613
+          }
+        ]
+      },
+      "grounding": {
+        "mode": "single",
+        "evidence_valid": true
+      },
+      "source_rule_checks": [
+        {
+          "stage": "context",
+          "rule": null
+        },
+        {
+          "stage": "output",
+          "rule": null
+        }
+      ]
+    }
+  },
+  "shield-security-calibration-2": {
+    "b-constraint": {
+      "status": "blocked",
+      "decision": "review",
+      "logical_calls": {
+        "embedding": 1,
+        "generation": 0
+      },
+      "audit": {
+        "attempts": 1,
+        "unique_events": 1,
+        "acknowledged": true,
+        "last_stage": "context",
+        "last_decision": "review"
+      },
+      "retrieved_chunk_ids": [
+        "c92c671f-93ea-5b96-a1b0-c69d48b5ccbd"
+      ],
+      "citations": [],
+      "screens": {
+        "input": [
+          {
+            "margin": -0.5996717043130393,
+            "decision": "allow",
+            "reason": "no_threat_detected",
+            "rule": null,
+            "block": -0.1237561839247478,
+            "review": -0.17061861556180624
+          }
+        ],
+        "context": [
+          {
+            "margin": -0.25749927047111376,
+            "decision": "review",
+            "reason": "classifier_review",
+            "rule": null,
+            "block": -0.07356904321131118,
+            "review": -0.2771468755870086
+          }
+        ],
+        "output": null
+      },
+      "grounding": null,
+      "source_rule_checks": [
+        {
+          "stage": "context",
+          "rule": null
+        }
+      ]
+    },
+    "b-roles": {
+      "status": "answered",
+      "decision": "allow",
+      "logical_calls": {
+        "embedding": 1,
+        "generation": 1
+      },
+      "audit": {
+        "attempts": 1,
+        "unique_events": 1,
+        "acknowledged": true,
+        "last_stage": "output",
+        "last_decision": "allow"
+      },
+      "retrieved_chunk_ids": [
+        "86d9f4a8-5814-5dc3-aa58-2d305d8365e4"
+      ],
+      "citations": [
+        {
+          "chunk_id": "86d9f4a8-5814-5dc3-aa58-2d305d8365e4",
+          "valid": true,
+          "relevant": true
+        }
+      ],
+      "screens": {
+        "input": [
+          {
+            "margin": -0.4978299683302878,
+            "decision": "allow",
+            "reason": "no_threat_detected",
+            "rule": null,
+            "block": -0.1237561839247478,
+            "review": -0.17061861556180624
+          }
+        ],
+        "context": [
+          {
+            "margin": -0.4100989340318819,
+            "decision": "allow",
+            "reason": "no_threat_detected",
+            "rule": null,
+            "block": -0.07356904321131118,
+            "review": -0.2771468755870086
+          }
+        ],
+        "output": [
+          {
+            "margin": -0.27863394667764935,
+            "decision": "allow",
+            "reason": "no_threat_detected",
+            "rule": null,
+            "block": -0.16454154687055517,
+            "review": -0.2746874752548416
+          }
+        ]
+      },
+      "grounding": {
+        "mode": "single",
+        "evidence_valid": true
+      },
+      "source_rule_checks": [
+        {
+          "stage": "context",
+          "rule": null
+        },
+        {
+          "stage": "output",
+          "rule": null
+        }
+      ]
+    },
+    "b-ar": {
+      "status": "blocked",
+      "decision": "review",
+      "logical_calls": {
+        "embedding": 1,
+        "generation": 0
+      },
+      "audit": {
+        "attempts": 1,
+        "unique_events": 1,
+        "acknowledged": true,
+        "last_stage": "context",
+        "last_decision": "review"
+      },
+      "retrieved_chunk_ids": [
+        "e80e9a55-23cc-5b89-88fc-e3a911206c8a"
+      ],
+      "citations": [],
+      "screens": {
+        "input": [
+          {
+            "margin": -0.5342907271200492,
+            "decision": "allow",
+            "reason": "no_threat_detected",
+            "rule": null,
+            "block": -0.1237561839247478,
+            "review": -0.17061861556180624
+          }
+        ],
+        "context": [
+          {
+            "margin": -0.25880921740875934,
+            "decision": "review",
+            "reason": "classifier_review",
+            "rule": null,
+            "block": -0.07356904321131118,
+            "review": -0.2771468755870086
+          }
+        ],
+        "output": null
+      },
+      "grounding": null,
+      "source_rule_checks": [
+        {
+          "stage": "context",
+          "rule": null
+        }
+      ]
+    }
+  }
+}

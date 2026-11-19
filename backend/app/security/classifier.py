@@ -12,8 +12,25 @@ from app.security.features import FEATURES, vectorizer
 
 VERSION='shield-security-v1'
 # The deployed audit RPC accepts VERSION as its schema/policy identifier.
-MODEL_REVISION='shield-security-calibration-1'
-BUNDLE_DIR=Path(__file__).resolve().parent/'artifacts'
+OUTPUT_CALIBRATION = 'shield-security-calibration-4'  # Rebuild-only experiment.
+READONLY_POLICY = 'shield-security-calibration-5'
+MODEL_REVISION=READONLY_POLICY
+ARTIFACTS = Path(__file__).resolve().parent / 'artifacts'
+REVISIONS = {
+    'shield-security-calibration-1': ARTIFACTS / 'calibration-1',
+    'shield-security-calibration-2': ARTIFACTS,
+    'shield-security-calibration-3': ARTIFACTS / 'calibration-3',
+    READONLY_POLICY: ARTIFACTS / 'calibration-5',
+}
+BUNDLE_DIR = REVISIONS[MODEL_REVISION]
+# Shipped bundles are immutable. A manifest and model copied together from
+# another experiment cannot select a different set of numerical parameters.
+BUNDLE_DIGESTS = {
+    'shield-security-calibration-1': '92021975d6b1f5e6bc5f1fed836b502e2485126308b1c8dbc61c858f20306d85',
+    'shield-security-calibration-2': '3d3434cf75f010f573de697745a0161e90bade63e62740c63a27381e07b137fd',
+    'shield-security-calibration-3': '1f9f49cf028894dc10106b9707b8afe82deeb3bd98d5eea3cb6b21efb5cacaff',
+    READONLY_POLICY: 'fa68f0c166edf201a0a80412f53bb10ef5c863f05f6306d9d1e81d4e29c3887e',
+}
 
 
 class SecurityUnavailable(Exception):
@@ -21,10 +38,15 @@ class SecurityUnavailable(Exception):
 
 
 class Classifier:
-    def __init__(self):
+    def __init__(self, *, revision=None, directory=None):
         try:
-            model_path=BUNDLE_DIR/'classifier.json'
-            manifest_path=BUNDLE_DIR/'manifest.json'
+            expected = MODEL_REVISION if revision is None else revision
+            if expected not in REVISIONS and not (expected == OUTPUT_CALIBRATION and directory is not None):
+                raise ValueError('Unknown model revision')
+            shipped = directory is None
+            directory = directory or (BUNDLE_DIR if revision is None else REVISIONS[expected])
+            model_path=directory/'classifier.json'
+            manifest_path=directory/'manifest.json'
             if model_path.is_symlink() or manifest_path.is_symlink():
                 raise ValueError('Artifact symlink')
             if model_path.stat().st_size>4_000_000 or manifest_path.stat().st_size>8192:
@@ -32,15 +54,28 @@ class Classifier:
             data=model_path.read_bytes()
             manifest=json.loads(manifest_path.read_bytes())
             if (hashlib.sha256(data).hexdigest()!=manifest['sha256'] or manifest['version']!=VERSION
-                    or manifest['model_revision']!=MODEL_REVISION
+                    or (shipped and manifest['sha256'] != BUNDLE_DIGESTS[expected])
+                    or manifest['model_revision']!=expected
                     or manifest['sklearn_version']!=sklearn.__version__):
                 raise ValueError('Artifact identity')
             model=json.loads(data)
             self.version=VERSION
             self.threshold=float(model['threshold'])
             self.review_threshold=float(model['review_threshold'])
+            self.revision = expected
+            self.digest = manifest['sha256']
+            stages=model.get('stage_thresholds', {})
+            expected_stages = {'shield-security-calibration-2': {'input', 'context'},
+                               OUTPUT_CALIBRATION: {'output'}, READONLY_POLICY: {'output'}}.get(expected, set())
+            if not isinstance(stages,dict) or set(stages)!=expected_stages:
+                raise ValueError('Stage policy schema')
+            if expected == READONLY_POLICY and model.get('output_guard') != 'read-only-authority-v1':
+                raise ValueError('Output policy identity')
+            self.stage_thresholds={stage: (float(cuts['threshold']),float(cuts['review_threshold']))
+                for stage,cuts in stages.items()}
             if (not math.isfinite(self.threshold) or not math.isfinite(self.review_threshold)
                     or not -100<self.review_threshold<self.threshold<100
+                    or any(not -100<review<block<100 for block,review in self.stage_thresholds.values())
                     or model['candidate'] not in ('logistic_regression','linear_svc')
                     or len(model['features'])!=2):
                 raise ValueError('Model schema')
