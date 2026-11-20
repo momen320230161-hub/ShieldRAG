@@ -46,3 +46,22 @@ python -m pytest -q tests/pilot_task063.py -p no:cacheprovider --tb=line
 ```
 
 The pilot caps logical requests at eight indexing embeddings, fourteen query embeddings and fourteen generations, with up to 108 provider attempts. It alternates route order across the seven case pairs and uses a private start marker to prevent reruns with the same manifest. After teardown, independently query the run-owned resource IDs and compare the bucket, grants and policies with preflight. Keep fixture SQL, credentials and recovery journals out of Git.
+
+## Task 06.3.1 worker readiness
+
+**WORKER FIX VERIFIED — LIVE PILOT REQUIRES NEW AUTHORIZATION**
+
+The offline diagnosis ran on Windows 11 build 26200 with locked CPython 3.12.10, from the checkout's `backend/` directory. The original focused test, before editing the application, reached CPython's `asyncio.windows_utils.pipe()`. The server end of the worker's stdin named pipe was created. Opening its peer via `_winapi.CreateFile` raised `PermissionError` with `WinError 5` before the extraction worker started.
+
+| Execution context | Child process with standard streams set to `DEVNULL` | Real worker using private pipes |
+| --- | --- | --- |
+| Restricted Codex session | Exited 0 | Named-pipe open denied before child startup. The focused test now reports the bounded 503. |
+| Same Windows host, authorized execution outside the session sandbox | Exited 0 | Synthetic TXT round-trip and exit 0. The original focused regression also passed with actual TXT and PDF extraction. |
+
+Both probes used the same Python environment and working directory. The comparison isolates the failure to opening the named pipe in the restricted execution context. The tests did not identify a specific pipe ACL or endpoint-protection rule. The original restricted context retains the **ENVIRONMENT BLOCKER — EXTRACTION WORKER CANNOT START**. The same Windows host supports the worker in the verified execution context.
+
+`backend/app/services/extraction.py` now maps an OS-level startup error to HTTP 503 with a fixed message. Tests in `backend/tests/test_rag.py` verify that simulated spawn and named-pipe denials fail the owned index job without calling embeddings or publishing chunks. `backend/tests/test_extraction_worker.py` uses real local subprocesses to check repeated and concurrent extraction, malformed and oversized input, process exit, timeout and crash cleanup, and no leftover files. The extraction worker keeps its private pipes, process isolation, and existing limits and integrity checks.
+
+The focused Windows suite passed **9 tests**. The full offline suite passed **344 tests**, with **43 integration tests deselected** and one existing AnyIO deprecation warning. `pip check` passed. Explicit Task 06.3 collection found one test, and running it with the live opt-in unset skipped it. Linux runtime verification was unavailable locally. The code and tests use the existing platform-specific process flags and portable subprocess APIs. [Commands](testing.md#reproduce-task-0631-worker-readiness).
+
+This task made zero Supabase fixture writes and zero Gemini calls. The [historical live report](../backend/security_evaluation/task063/live-report.json) retains the original failed run. For a separately approved pilot, first pass the real worker test using the same Python, working directory and shell permissions as the planned execution. Prepare two fresh synthetic accounts, eight TXT sources and a new recovery manifest. Keep the seven pairs and fourteen RAG requests within 36 logical Gemini operations and 108 attempts, and apply the guarded teardown and independent inventory check.

@@ -1,4 +1,10 @@
-# Current offline release verification
+# Task 06.3.1 Windows worker verification
+
+**WORKER FIX VERIFIED — LIVE PILOT REQUIRES NEW AUTHORIZATION.** On Windows 11 with CPython 3.12.10, the process-isolated extractor passed real TXT and PDF round-trips outside the restricted session. The restricted session denied opening the stdin named pipe before worker startup and now receives a bounded HTTP 503. No Gemini calls or Supabase fixture writes occurred.
+
+The focused suite passed 9 tests. The full offline suite passed 344 tests with zero failures and 43 live integrations deselected. `pip check` passed, and the explicit pilot module collected one test and skipped it with live opt-in unset. Linux runtime verification remains untested locally. The historical Task 06.3 live failure and cleanup remain recorded. [Diagnosis and readiness requirements](task063-live-verification.md#task-0631-worker-readiness).
+
+# Previous offline release verification
 
 The full non-live suite passed 336 tests. All 43 live integration tests were deselected. Dependency checks passed. Repeating both the external availability comparison and the project release checks produced identical result files.
 
