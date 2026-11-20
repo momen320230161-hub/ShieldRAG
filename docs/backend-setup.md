@@ -13,6 +13,8 @@ Copy-Item .env.example .env
 
 Open http://127.0.0.1:8000/docs. `GET /health` returns `200 {"status":"ok"}`. This is a liveness endpoint, not a database readiness check. Missing or invalid required configuration fails startup. Settings resolve `.env` paths relative to the repository, independent of the launch directory: process environment variables take priority, then `backend/.env`, then root `.env`. A setting omitted from `backend/.env` can come from root `.env`; an explicitly empty backend value overrides the root value. Keep all real keys outside Git.
 
+Leave FastAPI running on port 8000 while you start Vite in a second terminal. The frontend dev server forwards `/api/v1` and `/health` to this listener. Set the frontend's server-only `BACKEND_PROXY_TARGET` if you use a different local port. [Frontend setup](../frontend/README.md).
+
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `SUPABASE_URL` | Yes | HTTPS project origin; existing project is `https://bnehmoxpzycxnsdxxfxc.supabase.co` |

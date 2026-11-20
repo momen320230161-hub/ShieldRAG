@@ -1,0 +1,2 @@
+export const DEFAULT_API_TIMEOUT_MS = 12_000
+export const MAX_API_TIMEOUT_MS = 300_000

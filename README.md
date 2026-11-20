@@ -1,8 +1,10 @@
 # ShieldRAG
 
-Academic secure RAG backend. Python 3.12+, FastAPI, Gemini and the existing Supabase Cloud project. Backend only; no frontend.
+ShieldRAG is a secure academic retrieval application. The FastAPI backend uses Supabase and Gemini. The React frontend provides account sign-in and separate Student and Admin workspaces.
 
 Start with [backend setup](docs/backend-setup.md), [API contracts](docs/api-contracts.md), [Supabase integration](docs/supabase-integration.md), [security architecture](docs/security.md), and [testing](docs/testing.md).
+
+For local browser development, run FastAPI in one terminal and Vite in another. Use an existing provisioned Student or Admin account. [Frontend setup](frontend/README.md) · [Architecture](docs/frontend-architecture.md) · [Authentication](docs/frontend-authentication.md).
 
 Task 02.1 adds [full live authentication/RLS verification](docs/testing.md), [recorded results](docs/verification.md), and the [branch/PR workflow](docs/git-workflow.md).
 
