@@ -14,10 +14,15 @@ async def extract_pages(data: bytes, extension: str, settings: Settings) -> list
     environment = {k: v for k, v in os.environ.items() if k.upper() in (
         'PATH', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'LANG', 'LC_ALL')}
     environment['PYTHONPATH'] = str(BACKEND_ROOT)
-    process = await asyncio.create_subprocess_exec(sys.executable, '-m', 'app.services.extract_worker',
-        extension, str(settings.rag_max_pdf_pages), str(settings.rag_max_text_chars),
-        stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
-        env=environment, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+    try:
+        process = await asyncio.create_subprocess_exec(
+            sys.executable, '-m', 'app.services.extract_worker',
+            extension, str(settings.rag_max_pdf_pages), str(settings.rag_max_text_chars),
+            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+            env=environment, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
+        )
+    except OSError:
+        raise HTTPException(503, 'Document extraction worker unavailable') from None
     try:
         output, _ = await asyncio.wait_for(process.communicate(data), settings.rag_extraction_timeout)
     except (TimeoutError, asyncio.CancelledError):

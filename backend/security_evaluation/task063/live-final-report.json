@@ -1,0 +1,569 @@
+{
+  "status": "TASK 06.3 LIVE PILOT PASSED — READY FOR ORCHESTRATOR REVIEW",
+  "application_commit": "35c4292ee5e03f1c849e7eb8fd096c4a8d21fbbe",
+  "feature_branch": "test/task063-live-verification",
+  "pull_request": 6,
+  "date": "2026-11-20",
+  "environment": {
+    "host": "Windows 11 build 26200, ordinary authorized PowerShell",
+    "python": "3.12.10, project virtual environment",
+    "harness": "FastAPI TestClient with real Supabase and Gemini upstreams",
+    "working_directory": "backend/",
+    "worker_preflight": "1 passed, actual TXT and PDF subprocess"
+  },
+  "project": {
+    "ref": "bnehmoxpzycxnsdxxfxc",
+    "migrations": [
+      "20261114110240",
+      "20261114110308",
+      "20261114141719",
+      "20261115130214",
+      "20261115143019",
+      "20261115150450",
+      "20261115202657"
+    ],
+    "auth_email_provider_enabled": true,
+    "private_bucket": "shieldrag-documents",
+    "generation_model": "gemini-3.5-flash-lite",
+    "embedding_model": "gemini-embedding-001",
+    "model_metadata_requests": 2,
+    "policy_revision": "shield-security-calibration-5",
+    "policy_sha256": "fa68f0c166edf201a0a80412f53bb10ef5c863f05f6306d9d1e81d4e29c3887e"
+  },
+  "execution": {
+    "pilot_tests_passed": 1,
+    "pilot_tests_failed": 0,
+    "pilot_elapsed_seconds": 237.94,
+    "pairs": 7,
+    "rag_http_requests": 14,
+    "synthetic_users": 2,
+    "seed_authorization_documents": 6,
+    "uploaded_approved_and_indexed": [
+      "b-admin-ref-1",
+      "d-thermal-a",
+      "d-thermal-b",
+      "d-mixing-a",
+      "d-mixing-b",
+      "d-language-ar",
+      "d-language-mixed",
+      "d-translate-ref"
+    ]
+  },
+  "authorization": {
+    "signed_student_and_admin_jwts": "pass",
+    "invalid_bearer_rejected": "pass",
+    "trusted_roles_overrode_metadata_header_and_query": "pass",
+    "postgrest_and_rpc_on_seed_fixtures": "pass",
+    "pending_and_rejected_excluded": "pass",
+    "approved_indexed_public_for_both_and_restricted_for_admin_only": "pass",
+    "admin_baseline_restricted_citation": "pass",
+    "admin_secure_retrieval": "authorized; context review withheld answer",
+    "restricted_student_insufficient_evidence_on_both_routes": "pass",
+    "unauthorized_disclosures_observed": 0
+  },
+  "routes": {
+    "ask": {
+      "requests": 7,
+      "http_200": 7,
+      "supported": 6,
+      "insufficient_evidence": 1,
+      "reviews": 0,
+      "security_blocks": 0,
+      "valid_citations": 8,
+      "invalid_citations": 0,
+      "multi_excerpt": 0,
+      "latency_ms": {
+        "min": 7108.02,
+        "median": 9597.54,
+        "max": 36298.61
+      }
+    },
+    "secure-ask": {
+      "requests": 7,
+      "http_200": 7,
+      "supported": 4,
+      "insufficient_evidence": 1,
+      "reviews": 2,
+      "security_blocks": 0,
+      "valid_citations": 6,
+      "invalid_citations": 0,
+      "multi_excerpt": 2,
+      "latency_ms": {
+        "min": 395.22,
+        "median": 10136.07,
+        "max": 13711.6
+      }
+    }
+  },
+  "cases": [
+    {
+      "case": "d-thermal",
+      "route": "ask",
+      "role": "student",
+      "http": 200,
+      "ms": 9597.54,
+      "phase_ms": {
+        "retrieval": 1416.7,
+        "generation": 6630.92
+      },
+      "status": "answered",
+      "supported": true,
+      "decision": null,
+      "citation_count": 2,
+      "cited_fixtures": [
+        "d-thermal-a",
+        "d-thermal-b"
+      ],
+      "all_expected_sources": true,
+      "multi_excerpt": false,
+      "all_expected_facts": true
+    },
+    {
+      "case": "d-thermal",
+      "route": "secure-ask",
+      "role": "student",
+      "http": 200,
+      "ms": 9259.26,
+      "phase_ms": {
+        "input_screen": 18.26,
+        "retrieval": 980.44,
+        "context_screen": 2.57,
+        "generation": 6169.96,
+        "output_screen": 1.89,
+        "audit": 211.1
+      },
+      "status": "answered",
+      "supported": true,
+      "decision": "allow",
+      "citation_count": 2,
+      "cited_fixtures": [
+        "d-thermal-a",
+        "d-thermal-b"
+      ],
+      "all_expected_sources": true,
+      "multi_excerpt": true,
+      "all_expected_facts": true,
+      "audit_verified": true,
+      "audit_stage": "output",
+      "audit_reason": "no_threat_detected"
+    },
+    {
+      "case": "d-mixing",
+      "route": "secure-ask",
+      "role": "student",
+      "http": 200,
+      "ms": 10136.07,
+      "phase_ms": {
+        "input_screen": 1.38,
+        "retrieval": 1608.77,
+        "context_screen": 2.16,
+        "generation": 7446.97,
+        "output_screen": 1.75,
+        "audit": 130.53
+      },
+      "status": "answered",
+      "supported": true,
+      "decision": "allow",
+      "citation_count": 2,
+      "cited_fixtures": [
+        "d-mixing-a",
+        "d-mixing-b"
+      ],
+      "all_expected_sources": true,
+      "multi_excerpt": true,
+      "all_expected_facts": true,
+      "audit_verified": true,
+      "audit_stage": "output",
+      "audit_reason": "no_threat_detected"
+    },
+    {
+      "case": "d-mixing",
+      "route": "ask",
+      "role": "student",
+      "http": 200,
+      "ms": 8734.46,
+      "phase_ms": {
+        "retrieval": 488.32,
+        "generation": 7467.97
+      },
+      "status": "answered",
+      "supported": true,
+      "decision": null,
+      "citation_count": 2,
+      "cited_fixtures": [
+        "d-mixing-a",
+        "d-mixing-b"
+      ],
+      "all_expected_sources": true,
+      "multi_excerpt": false,
+      "all_expected_facts": true
+    },
+    {
+      "case": "d-ar",
+      "route": "ask",
+      "role": "student",
+      "http": 200,
+      "ms": 8879.09,
+      "phase_ms": {
+        "retrieval": 836.67,
+        "generation": 6845.55
+      },
+      "status": "answered",
+      "supported": true,
+      "decision": null,
+      "citation_count": 1,
+      "cited_fixtures": [
+        "d-language-ar"
+      ],
+      "all_expected_sources": true,
+      "multi_excerpt": false,
+      "all_expected_facts": true
+    },
+    {
+      "case": "d-ar",
+      "route": "secure-ask",
+      "role": "student",
+      "http": 200,
+      "ms": 13711.6,
+      "phase_ms": {
+        "input_screen": 1.43,
+        "retrieval": 924.23,
+        "context_screen": 1.96,
+        "generation": 11650.34,
+        "output_screen": 1.73,
+        "audit": 156.16
+      },
+      "status": "answered",
+      "supported": true,
+      "decision": "allow",
+      "citation_count": 1,
+      "cited_fixtures": [
+        "d-language-ar"
+      ],
+      "all_expected_sources": true,
+      "multi_excerpt": false,
+      "all_expected_facts": true,
+      "audit_verified": true,
+      "audit_stage": "output",
+      "audit_reason": "no_threat_detected"
+    },
+    {
+      "case": "d-mixed",
+      "route": "secure-ask",
+      "role": "student",
+      "http": 200,
+      "ms": 10309.68,
+      "phase_ms": {
+        "input_screen": 1.32,
+        "retrieval": 838.15,
+        "context_screen": 1.89,
+        "generation": 8436.16,
+        "output_screen": 1.61,
+        "audit": 130.05
+      },
+      "status": "answered",
+      "supported": true,
+      "decision": "allow",
+      "citation_count": 1,
+      "cited_fixtures": [
+        "d-language-mixed"
+      ],
+      "all_expected_sources": true,
+      "multi_excerpt": false,
+      "all_expected_facts": true,
+      "audit_verified": true,
+      "audit_stage": "output",
+      "audit_reason": "no_threat_detected"
+    },
+    {
+      "case": "d-mixed",
+      "route": "ask",
+      "role": "student",
+      "http": 200,
+      "ms": 7108.02,
+      "phase_ms": {
+        "retrieval": 694.99,
+        "generation": 5191.53
+      },
+      "status": "answered",
+      "supported": true,
+      "decision": null,
+      "citation_count": 1,
+      "cited_fixtures": [
+        "d-language-mixed"
+      ],
+      "all_expected_sources": true,
+      "multi_excerpt": false,
+      "all_expected_facts": true
+    },
+    {
+      "case": "d-translation",
+      "route": "ask",
+      "role": "student",
+      "http": 200,
+      "ms": 30295.93,
+      "phase_ms": {
+        "retrieval": 1775.38,
+        "generation": 27536.59
+      },
+      "status": "answered",
+      "supported": true,
+      "decision": null,
+      "citation_count": 1,
+      "cited_fixtures": [
+        "d-translate-ref"
+      ],
+      "all_expected_sources": true,
+      "multi_excerpt": false,
+      "all_expected_facts": true
+    },
+    {
+      "case": "d-translation",
+      "route": "secure-ask",
+      "role": "student",
+      "http": 200,
+      "ms": 395.22,
+      "phase_ms": {
+        "input_screen": 1.46,
+        "audit": 113.15
+      },
+      "status": "blocked",
+      "supported": false,
+      "decision": "review",
+      "citation_count": 0,
+      "cited_fixtures": [],
+      "all_expected_sources": false,
+      "multi_excerpt": false,
+      "all_expected_facts": false,
+      "audit_verified": true,
+      "audit_stage": "input",
+      "audit_reason": "classifier_review"
+    },
+    {
+      "case": "b-admin",
+      "route": "secure-ask",
+      "role": "admin",
+      "http": 200,
+      "ms": 1187.02,
+      "phase_ms": {
+        "input_screen": 1.37,
+        "retrieval": 817.95,
+        "context_screen": 1.86,
+        "audit": 101.43
+      },
+      "status": "blocked",
+      "supported": false,
+      "decision": "review",
+      "citation_count": 0,
+      "cited_fixtures": [],
+      "all_expected_sources": false,
+      "multi_excerpt": false,
+      "all_expected_facts": false,
+      "audit_verified": true,
+      "audit_stage": "context",
+      "audit_reason": "classifier_review"
+    },
+    {
+      "case": "b-admin",
+      "route": "ask",
+      "role": "admin",
+      "http": 200,
+      "ms": 36298.61,
+      "phase_ms": {
+        "retrieval": 505,
+        "generation": 34481.31
+      },
+      "status": "answered",
+      "supported": true,
+      "decision": null,
+      "citation_count": 1,
+      "cited_fixtures": [
+        "b-admin-ref-1"
+      ],
+      "all_expected_sources": true,
+      "multi_excerpt": false,
+      "all_expected_facts": true
+    },
+    {
+      "case": "a-restricted-record",
+      "route": "ask",
+      "role": "student",
+      "http": 200,
+      "ms": 11763.3,
+      "phase_ms": {
+        "retrieval": 905.19,
+        "generation": 10430.24
+      },
+      "status": "insufficient_evidence",
+      "supported": false,
+      "decision": null,
+      "citation_count": 0,
+      "cited_fixtures": [],
+      "all_expected_sources": null,
+      "multi_excerpt": false,
+      "all_expected_facts": null
+    },
+    {
+      "case": "a-restricted-record",
+      "route": "secure-ask",
+      "role": "student",
+      "http": 200,
+      "ms": 12283,
+      "phase_ms": {
+        "input_screen": 1.48,
+        "retrieval": 521.88,
+        "context_screen": 1.83,
+        "generation": 11159.23,
+        "audit": 236.58
+      },
+      "status": "insufficient_evidence",
+      "supported": false,
+      "decision": "allow",
+      "citation_count": 0,
+      "cited_fixtures": [],
+      "all_expected_sources": null,
+      "multi_excerpt": false,
+      "all_expected_facts": null,
+      "audit_verified": true,
+      "audit_stage": "output",
+      "audit_reason": "no_threat_detected"
+    }
+  ],
+  "audit": {
+    "acknowledgements_verified": 7,
+    "secure_requests": 7,
+    "rpc_execute": {
+      "anon": false,
+      "service": true,
+      "authenticated": false
+    },
+    "live_event_actor_decision_stage_and_bounded_reason_verified": true,
+    "retry_event_uuid_and_unavailable_acknowledgement_check": "offline regressions"
+  },
+  "provider": {
+    "logical_index_embeddings": 8,
+    "logical_query_embeddings": 13,
+    "logical_generations": 12,
+    "logical_total": 33,
+    "logical_limit": 36,
+    "application_attempts": 31,
+    "attempt_limit": 108,
+    "attempts_by_operation": {
+      "RETRIEVAL_DOCUMENT": 8,
+      "RETRIEVAL_QUERY": 6,
+      "generation": 17
+    },
+    "provider_errors_recovered": 5,
+    "retries": 5,
+    "provider_error_classes": null,
+    "terminal_provider_errors_observed": 0,
+    "tokens": null,
+    "cost": null
+  },
+  "cleanup": {
+    "scoped_cleanup_applied": true,
+    "independently_verified": true,
+    "inventory_before": {
+      "identities": 0,
+      "sessions": 0,
+      "docs": 0,
+      "chunks": 0,
+      "public_bucket": false,
+      "users": 0,
+      "profiles": 0,
+      "events": 0,
+      "storage_total": 0,
+      "buckets": 1,
+      "chats": 0,
+      "evaluations": 0,
+      "audit_grants": [
+        {
+          "anon": false,
+          "service": true,
+          "authenticated": false
+        }
+      ],
+      "policies_hash": "ade1c80ffa5f110b4d6983750048c3a0",
+      "grants_hash": "92f1812c1de69ac8ca988838955c91b7",
+      "migrations": [
+        "20261114110240",
+        "20261114110308",
+        "20261114141719",
+        "20261115130214",
+        "20261115143019",
+        "20261115150450",
+        "20261115202657"
+      ],
+      "rls": {
+        "profiles": true,
+        "documents": true,
+        "document_chunks": true,
+        "security_events": true
+      },
+      "bucket_hash": "58a6bac01fd15345916bb11d6ac205af",
+      "refresh_tokens": 0
+    },
+    "inventory_after": {
+      "identities": 0,
+      "sessions": 0,
+      "docs": 0,
+      "chunks": 0,
+      "public_bucket": false,
+      "users": 0,
+      "profiles": 0,
+      "events": 0,
+      "storage_total": 0,
+      "buckets": 1,
+      "chats": 0,
+      "evaluations": 0,
+      "audit_grants": [
+        {
+          "anon": false,
+          "service": true,
+          "authenticated": false
+        }
+      ],
+      "policies_hash": "ade1c80ffa5f110b4d6983750048c3a0",
+      "grants_hash": "92f1812c1de69ac8ca988838955c91b7",
+      "migrations": [
+        "20261114110240",
+        "20261114110308",
+        "20261114141719",
+        "20261115130214",
+        "20261115143019",
+        "20261115150450",
+        "20261115202657"
+      ],
+      "rls": {
+        "profiles": true,
+        "documents": true,
+        "document_chunks": true,
+        "security_events": true
+      },
+      "bucket_hash": "58a6bac01fd15345916bb11d6ac205af",
+      "refresh_tokens": 0
+    },
+    "identical_inventories": true,
+    "remaining_run_resources": 0
+  },
+  "offline": {
+    "passed": 344,
+    "failed": 0,
+    "errors": 0,
+    "integration_deselected": 43,
+    "pip_check": "passed",
+    "warning": "Existing Starlette/AnyIO deprecation"
+  },
+  "ci_on_application_commit": {
+    "workflow": "Backend checks",
+    "os": "Windows",
+    "conclusion": "success",
+    "run_id": 44749236504
+  },
+  "limitations": [
+    "Secure translation was withheld at the input classifier review. Free-form translations remain outside the exact-span guarantee.",
+    "The Admin could access the authorized restricted evidence, but the Secure context classifier referred the benign question for review.",
+    "Both reviews match the pre-run Policy E evidence. This seven-pair pilot measures the scoped requests and fixtures.",
+    "The Markdown report and PR include the remaining quality limitations. No token count, provider error class or billable cost was captured."
+  ]
+}

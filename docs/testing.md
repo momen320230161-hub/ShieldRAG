@@ -29,6 +29,20 @@ All commands run from `backend/` using Python 3.12. Mocked tests require no cred
 
 The unit suite preserves the original checks and adds error classification, malformed upstream JSON, and runner cleanup/failure tests. Live tests are opt-in; skipped tests are not passed tests.
 
+## Reproduce Task 06.3.1 worker readiness
+
+From `backend/`, use the locked Python environment. Run the real worker tests in the same execution context planned for any future live pilot.
+
+```powershell
+python -m pytest -q tests/test_rag.py::test_txt_pdf_page_provenance_and_worker -p no:cacheprovider --tb=short
+python -m pytest -q tests/test_extraction_worker.py tests/test_rag.py::test_index_worker_start_failure_is_redacted_and_cleans_up -p no:cacheprovider
+python -m pytest -q -m 'not integration' -p no:cacheprovider --basetemp .integration/task0631-regression-check
+python -m pip check
+python -m pytest --collect-only -q tests/pilot_task063.py -p no:cacheprovider
+```
+
+These checks use synthetic local inputs and mock provider dependencies where needed. A startup 503 means this execution context has not passed readiness. The Windows diagnosis and the fixture limits for a separately approved pilot are in the [Task 06.3 runbook](task063-live-verification.md#task-0631-worker-readiness).
+
 ## Basic live probes, without accounts
 
 Configure `.env` from `.env.example`, then:

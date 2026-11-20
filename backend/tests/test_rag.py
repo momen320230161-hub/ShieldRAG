@@ -60,7 +60,10 @@ def text_pdf(texts=('The synthetic archive opens at nine.',)):
 
 
 def test_txt_pdf_page_provenance_and_worker():
-    assert extract(b'\xef\xbb\xbfHello\r\nworld', 'txt', 10, 100) == [{'page': None, 'text': 'Hello\nworld'}]
+    text = b'\xef\xbb\xbfHello\r\nworld'
+    expected = [{'page': None, 'text': 'Hello\nworld'}]
+    assert extract(text, 'txt', 10, 100) == expected
+    assert asyncio.run(extract_pages(text, 'txt', settings())) == expected
     data = text_pdf(('First page facts.', 'Second page facts.'))
     pages = extract(data, 'pdf', 10, 1000)
     assert [p['page'] for p in pages] == [1, 2]
@@ -199,6 +202,26 @@ def test_index_partial_failure_never_publishes_and_retry_is_possible():
     with pytest.raises(HTTPException):
         asyncio.run(index_document(gateway, store, rag_store, gemini, principal(), UUID(DOC), settings()))
     rag_store.fail.assert_awaited_once()
+    rag_store.publish.assert_not_called()
+
+
+@pytest.mark.parametrize('windows_pipe_failure', [False, True], ids=['spawn-denied', 'named-pipe-denied'])
+def test_index_worker_start_failure_is_redacted_and_cleans_up(monkeypatch, windows_pipe_failure):
+    failure = PermissionError('private test diagnostic')
+    if windows_pipe_failure:
+        failure.winerror = 5
+    start = AsyncMock(side_effect=failure)
+    monkeypatch.setattr(asyncio, 'create_subprocess_exec', start)
+    _, gateway, store, rag_store, gemini = index_dependencies()
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(index_document(gateway, store, rag_store, gemini, principal(), UUID(DOC), settings()))
+
+    assert error.value.status_code == 503
+    assert error.value.detail == 'Document extraction worker unavailable'
+    assert error.value.__suppress_context__
+    start.assert_awaited_once()
+    rag_store.fail.assert_awaited_once_with(principal(), UUID(DOC), rag_store.begin.call_args.args[2])
+    gemini.embed.assert_not_called()
     rag_store.publish.assert_not_called()
 
 
