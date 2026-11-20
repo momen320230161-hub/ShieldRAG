@@ -181,6 +181,39 @@ describe('profile trust and session changes', () => {
     expect(await screen.findByRole('heading', { name: 'Student dashboard' })).toBeVisible()
   })
 
+  it('keeps a timed-out profile protected, preserves the session, and retries only on request', async () => {
+    const { gateway } = mockAuth(studentSession())
+    const started = Promise.withResolvers<void>()
+    const late = Promise.withResolvers<Response>()
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementationOnce(() => {
+      started.resolve()
+      return late.promise
+    }).mockResolvedValueOnce(Response.json(student))
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+    try {
+      mount('/student', gateway)
+      await act(async () => { await started.promise })
+      expect(screen.getByRole('status')).toBeVisible()
+      expect(screen.queryByRole('heading', { name: 'Student dashboard' })).toBeNull()
+      await act(() => vi.advanceTimersByTimeAsync(12_000))
+      expect(screen.getByRole('alert')).toHaveTextContent('The request took too long.')
+      expect(screen.queryByRole('heading', { name: 'Student dashboard' })).toBeNull()
+      expect(fetch).toHaveBeenCalledTimes(1)
+      expect(gateway.auth.signOut).not.toHaveBeenCalled()
+      expect(gateway.auth.refreshSession).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('heading', { name: 'Student dashboard' })).toBeVisible()
+    await act(async () => { late.resolve(Response.json(admin)) })
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('heading', { name: 'Student dashboard' })).toBeVisible()
+    expect(gateway.auth.signOut).not.toHaveBeenCalled()
+  })
+
   it('refreshes an expired restored session before sending any backend request', async () => {
     const auth = mockAuth(session(student, 'expired-access', -1))
     const fresh = studentSession()

@@ -38,6 +38,12 @@ Open the loopback URL Vite prints, typically `http://127.0.0.1:5173`. Sign in wi
 | `VITE_API_BASE_URL` | Same-origin API prefix. Defaults to `/api/v1`. A custom prefix needs a corresponding proxy route. |
 | `BACKEND_PROXY_TARGET` | Vite's development-only backend origin. Defaults to `http://127.0.0.1:8000`. |
 
+## API timeouts
+
+Requests, including the sign-in profile check, use **12 seconds** by default. Callers can set `timeoutMs` to a positive integer up to 300,000 for an individual request. Suggested starting values for future features are **30 seconds** for search, **90 seconds** for either RAG answer route and **120 seconds** for indexing.
+
+An explicit cancellation preserves the caller's abort reason. A timeout has its own error kind and includes the time spent reading and validating the response. A profile timeout hides the workspace and offers a manual retry while keeping the session. A timed-out POST may still complete on the server. The client never replays it, and future indexing UI must check server state before enabling a retry. [Request deadlines](../docs/frontend-architecture.md#api-request-deadlines).
+
 ## Checks
 
 ```text
@@ -49,4 +55,4 @@ npm run build
 npm run check:bundle
 ```
 
-Tests mock Auth and FastAPI responses, with no live accounts or provider calls. The build also works without configuration for offline checks. In that case the app shows setup guidance. See [architecture](../docs/frontend-architecture.md) and [authentication](../docs/frontend-authentication.md).
+Tests mock Auth and FastAPI responses, with no live accounts or provider calls. Live Student and Admin login through the frontend remains unverified. The build also works without configuration for offline checks. In that case the app shows setup guidance. See [architecture](../docs/frontend-architecture.md) and [authentication](../docs/frontend-authentication.md).

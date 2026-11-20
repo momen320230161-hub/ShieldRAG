@@ -1,5 +1,6 @@
 import type { ZodType } from 'zod'
 import { isApiPath } from '../config/environment'
+import { DEFAULT_API_TIMEOUT_MS, MAX_API_TIMEOUT_MS } from '../config/timeouts'
 
 const statusMessages: Partial<Record<number, string>> = {
   400: 'Check the information you entered.',
@@ -13,17 +14,21 @@ const statusMessages: Partial<Record<number, string>> = {
   503: 'The service is temporarily unavailable.',
 }
 
+const requestMessages = {
+  network: 'Could not reach the service. Check your connection and try again.',
+  timeout: 'The request took too long.',
+  'invalid-response': 'The service returned an unexpected response.',
+}
+
 export class ApiError extends Error {
   constructor(
-    readonly kind: 'http' | 'network' | 'invalid-response',
+    readonly kind: 'http' | keyof typeof requestMessages,
     readonly status?: number,
   ) {
     super(
-      kind === 'http' && status !== undefined
-        ? statusMessages[status] ?? 'The service could not complete this request.'
-        : kind === 'network'
-          ? 'Could not reach the service. Check your connection and try again.'
-          : 'The service returned an unexpected response.',
+      kind === 'http'
+        ? statusMessages[status ?? 0] ?? 'The service could not complete this request.'
+        : requestMessages[kind],
     )
     this.name = 'ApiError'
   }
@@ -35,6 +40,44 @@ export interface ApiRequest<T> {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
   body?: unknown
   signal?: AbortSignal
+  timeoutMs?: number
+}
+
+async function runWithDeadline<T>(
+  timeoutMs: number,
+  cancellation: AbortSignal | undefined,
+  run: (signal: AbortSignal, checkDeadline: () => void) => Promise<T>,
+): Promise<T> {
+  cancellation?.throwIfAborted()
+  const timeout = new AbortController()
+  const signal = cancellation ? AbortSignal.any([cancellation, timeout.signal]) : timeout.signal
+  const expiresAt = performance.now() + timeoutMs
+  const expire = () => timeout.abort(new ApiError('timeout'))
+  const timer = setTimeout(expire, timeoutMs)
+  let onAbort: (() => void) | undefined
+
+  function checkDeadline() {
+    signal.throwIfAborted()
+    // A timer cannot run during synchronous JSON/schema work.
+    if (performance.now() >= expiresAt) {
+      expire()
+      signal.throwIfAborted()
+    }
+  }
+
+  try {
+    const aborted = new Promise<never>((_, reject) => {
+      onAbort = () => reject(signal.reason)
+      signal.addEventListener('abort', onAbort, { once: true })
+    })
+    // Settle even if a body reader ignores abort. Promise.race also observes late rejections.
+    const result = await Promise.race([aborted, run(signal, checkDeadline)])
+    checkDeadline()
+    return result
+  } finally {
+    clearTimeout(timer)
+    if (onAbort) signal.removeEventListener('abort', onAbort)
+  }
 }
 
 export function createApiClient(base: string) {
@@ -43,45 +86,51 @@ export function createApiClient(base: string) {
   return {
     async request<T>(request: ApiRequest<T>, token: string): Promise<T> {
       if (!isApiPath(request.path)) throw new TypeError('Invalid API path.')
-      const signals = [AbortSignal.timeout(12_000)]
-      if (request.signal) signals.push(request.signal)
-      const signal = AbortSignal.any(signals)
-      const headers = new Headers({ Accept: 'application/json', Authorization: `Bearer ${token}` })
-      const body = request.body === undefined ? undefined : JSON.stringify(request.body)
-      if (body !== undefined) headers.set('Content-Type', 'application/json')
-
-      let response: Response
-      try {
-        response = await fetch(new URL(base + request.path, window.location.origin), {
-          method: request.method ?? 'GET',
-          headers,
-          body,
-          signal,
-          credentials: 'omit',
-          cache: 'no-store',
-          redirect: 'error',
-          referrerPolicy: 'no-referrer',
-        })
-      } catch {
-        request.signal?.throwIfAborted()
-        throw new ApiError('network')
+      const timeoutMs = request.timeoutMs === undefined ? DEFAULT_API_TIMEOUT_MS : request.timeoutMs
+      if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_API_TIMEOUT_MS) {
+        throw new RangeError('Invalid API request timeout.')
       }
 
-      // Map the trusted HTTP status and keep arbitrary backend detail out of the UI.
-      if (!response.ok) throw new ApiError('http', response.status)
-      let json: unknown
-      try {
-        json = await response.json()
-      } catch {
-        request.signal?.throwIfAborted()
-        if (signal.aborted) throw new ApiError('network')
-        throw new ApiError('invalid-response')
-      }
+      return runWithDeadline(timeoutMs, request.signal, async (signal, checkDeadline) => {
+        const headers = new Headers({ Accept: 'application/json', Authorization: `Bearer ${token}` })
+        const body = request.body === undefined ? undefined : JSON.stringify(request.body)
+        if (body !== undefined) headers.set('Content-Type', 'application/json')
+        checkDeadline()
 
-      request.signal?.throwIfAborted()
-      const parsed = request.schema.safeParse(json)
-      if (!parsed.success) throw new ApiError('invalid-response')
-      return parsed.data
+        let response: Response
+        try {
+          response = await fetch(new URL(base + request.path, window.location.origin), {
+            method: request.method ?? 'GET',
+            headers,
+            body,
+            signal,
+            credentials: 'omit',
+            cache: 'no-store',
+            redirect: 'error',
+            referrerPolicy: 'no-referrer',
+          })
+        } catch {
+          checkDeadline()
+          throw new ApiError('network')
+        }
+
+        checkDeadline()
+        // Map the trusted HTTP status and keep arbitrary backend detail out of the UI.
+        if (!response.ok) throw new ApiError('http', response.status)
+        let json: unknown
+        try {
+          json = await response.json()
+        } catch {
+          checkDeadline()
+          throw new ApiError('invalid-response')
+        }
+
+        checkDeadline()
+        const parsed = request.schema.safeParse(json)
+        checkDeadline()
+        if (!parsed.success) throw new ApiError('invalid-response')
+        return parsed.data
+      })
     },
   }
 }
